@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# VS Code
+.vscode/
+
+# Project Specific
+caches/
+output/
+output_*/
+*.wav
+*.mp3
+
+# Models (Users should download these or use the Docker image)
+models/*.onnx
+models/*.bin
+models/*.json
+models/*.pt
+!models/.keep
+
+# Temporary files
+*.log

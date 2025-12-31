@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+.github
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Project Output/Data
+output/
+caches/
+*.wav
+*.mp3
+output_*/
+
+# Large Models (If we want to avoid copying local models and prefer downloading in build or mounting)
+# However, if user HAS models locally and wants them in image, we might NOT ignore them.
+# Given the Dockerfile does "COPY models/ /app/models/", we should probably NOT ignore them here 
+# UNLESS the intention is to force users to use volume or download in build.
+# For "optimized for sharing", we probably don't want to COPY 300MB+ files from context up to daemon every build.
+# But specific instructions said "Auto-downloaded...".
+# I'll ignore the large model files to keep context light, assuming usage of volumes or build steps.
+models/*.onnx
+models/*.bin
+models/*.pt
