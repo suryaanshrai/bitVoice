@@ -2,12 +2,14 @@ import pytest
 import sys
 import os
 from unittest.mock import MagicMock, patch, mock_open
+from typing import Tuple, Any
+from pathlib import Path
 import bitvoice
 from bitvoice import BitVoice
 
 # --- Library Integration ---
 @patch("bitvoice.get_engine")
-def test_bitvoice_convert_text(mock_get_gen):
+def test_bitvoice_convert_text(mock_get_gen: MagicMock) -> None:
     mock_engine_instance = MagicMock()
     mock_engine_instance.get_voices.return_value = ["default"]
     mock_get_gen.return_value = mock_engine_instance
@@ -19,13 +21,13 @@ def test_bitvoice_convert_text(mock_get_gen):
     mock_engine_instance.generate.assert_called_with("Hello World", "test_voice", "out.wav")
 
 @patch("bitvoice.get_engine")
-def test_bitvoice_convert_file(mock_get_gen, temp_files):
+def test_bitvoice_convert_file(mock_get_gen: MagicMock, temp_files: Tuple[Path, Path]) -> None:
     md_file, _ = temp_files
     mock_engine_instance = MagicMock()
     mock_get_gen.return_value = mock_engine_instance
     
     bv = BitVoice(model="test_model")
-    bv.convert_file(md_file, "out.wav")
+    bv.convert_file(str(md_file), "out.wav")
     
     mock_engine_instance.generate.assert_called()
     args = mock_engine_instance.generate.call_args
@@ -35,27 +37,26 @@ def test_bitvoice_convert_file(mock_get_gen, temp_files):
 
 @patch("sys.argv", ["bitvoice.py", "--install"])
 @patch("bitvoice.install_tool")
-def test_cli_install_flag(mock_install):
-    # Fixed: Removed raises SystemExit because the function returns normally
+def test_cli_install_flag(mock_install: MagicMock) -> None:
     bitvoice.main()
     mock_install.assert_called_once()
 
 @patch("sys.argv", ["bitvoice.py", "--install-library"])
 @patch("bitvoice.install_library_package")
-def test_cli_install_library_flag(mock_install_lib):
+def test_cli_install_library_flag(mock_install_lib: MagicMock) -> None:
     bitvoice.main()
     mock_install_lib.assert_called_once()
 
 @patch("sys.argv", ["bitvoice.py", "--install-f5-tts"])
 @patch("bitvoice.install_f5_tts_deps")
-def test_cli_install_f5_flag(mock_install_f5):
+def test_cli_install_f5_flag(mock_install_f5: MagicMock) -> None:
     bitvoice.main()
     mock_install_f5.assert_called_once()
 
 @patch("subprocess.check_call")
 @patch("sys.executable", "/usr/bin/python3")
 @patch("builtins.input", side_effect=["y", "n"]) # 1. Venv confirm (y), 2. F5 confirm (n)
-def test_install_library_package_function_no_f5(mock_input, mock_check_call):
+def test_install_library_package_function_no_f5(mock_input: MagicMock, mock_check_call: MagicMock) -> None:
     with patch("sys.prefix", "/usr"), patch("sys.base_prefix", "/usr"):
         bitvoice.install_library_package()
         mock_check_call.assert_called_with(["/usr/bin/python3", "-m", "pip", "install", "-e", "."])
@@ -63,7 +64,7 @@ def test_install_library_package_function_no_f5(mock_input, mock_check_call):
 @patch("subprocess.check_call")
 @patch("sys.executable", "/usr/bin/python3")
 @patch("builtins.input", side_effect=["y", "y"]) # 1. Venv confirm (y), 2. F5 confirm (y)
-def test_install_library_package_function_with_f5(mock_input, mock_check_call):
+def test_install_library_package_function_with_f5(mock_input: MagicMock, mock_check_call: MagicMock) -> None:
     with patch("sys.prefix", "/usr"), patch("sys.base_prefix", "/usr"):
         bitvoice.install_library_package()
         # Should verify call includes .[f5]
@@ -71,7 +72,7 @@ def test_install_library_package_function_with_f5(mock_input, mock_check_call):
 
 @patch("builtins.open", new_callable=mock_open)
 @patch("os.chmod")
-def test_install_tool_function(mock_chmod, mock_file):
+def test_install_tool_function(mock_chmod: MagicMock, mock_file: MagicMock) -> None:
     with patch("os.name", "posix"):
         bitvoice.install_tool()
         # In mock_open, we check if write was called
@@ -82,7 +83,7 @@ def test_install_tool_function(mock_chmod, mock_file):
 
 # Rewriting test_main_cli_execution_flow to use real Path but mocked engine
 @patch("bitvoice.get_engine")
-def test_main_cli_e2e(mock_get_eng, temp_files):
+def test_main_cli_e2e(mock_get_eng: MagicMock, temp_files: Tuple[Path, Path]) -> None:
     md_file, _ = temp_files
     mock_eng = MagicMock()
     mock_get_eng.return_value = mock_eng

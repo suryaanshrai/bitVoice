@@ -5,29 +5,60 @@ import argparse
 import hashlib
 import pickle
 import re
-from pathlib import Path
+import logging
 import soundfile as sf
 import warnings
+from pathlib import Path
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Callable, Tuple, Any
 
 # Suppress some common warnings from libraries
 warnings.filterwarnings("ignore")
 
+# --- Logging Setup ---
+logger = logging.getLogger("bitvoice")
+
 # --- Configuration ---
-CACHE_DIR = "caches"
-CACHE_FILE = os.path.join(CACHE_DIR, "cache.pkl")
-MODELS_DIR = "models"
-KOKORO_MODEL = os.path.join(MODELS_DIR, "kokoro-v1.0.onnx")
-KOKORO_VOICES = os.path.join(MODELS_DIR, "voices-v1.0.bin")
-PIPER_MODEL = os.path.join(MODELS_DIR, "en_US-lessac-medium.onnx")
-PIPER_CONFIG = os.path.join(MODELS_DIR, "en_US-lessac-medium.onnx.json")
+@dataclass
+class Settings:
+    CACHE_DIR: str = "caches"
+    MODELS_DIR: str = "models"
+    CACHE_FILENAME: str = "cache.pkl"
+    KOKORO_MODEL: str = "kokoro-v1.0.onnx"
+    KOKORO_VOICES: str = "voices-v1.0.bin"
+    PIPER_MODEL: str = "en_US-lessac-medium.onnx"
+    PIPER_CONFIG: str = "en_US-lessac-medium.onnx.json"
+
+    @property
+    def cache_path(self) -> str:
+        return os.path.join(self.CACHE_DIR, self.CACHE_FILENAME)
+
+    @property
+    def kokoro_model_path(self) -> str:
+        return os.path.join(self.MODELS_DIR, self.KOKORO_MODEL)
+
+    @property
+    def kokoro_voices_path(self) -> str:
+        return os.path.join(self.MODELS_DIR, self.KOKORO_VOICES)
+
+    @property
+    def piper_model_path(self) -> str:
+        return os.path.join(self.MODELS_DIR, self.PIPER_MODEL)
+
+    @property
+    def piper_config_path(self) -> str:
+        return os.path.join(self.MODELS_DIR, self.PIPER_CONFIG)
+
+CONF = Settings()
 
 # --- Utilities ---
-def get_file_hash(content, model_name, voice_name):
+# --- Utilities ---
+def get_file_hash(content: str, model_name: str, voice_name: str) -> str:
     """Generate SHA256 hash for content and parameters."""
     full_string = f"{content}|{model_name}|{voice_name}"
     return hashlib.sha256(full_string.encode('utf-8')).hexdigest()
 
-def clean_markdown(text):
+def clean_markdown(text: str) -> str:
     """Basic markdown cleaning for better TTS."""
     # Remove images: ![alt](url)
     text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
@@ -45,74 +76,84 @@ def clean_markdown(text):
     text = re.sub(r'<[^>]+>', '', text)
     return text.strip()
 
-def read_file_content(file_path):
-    """Read text from supported file formats."""
-    if isinstance(file_path, str): file_path = Path(file_path)
-    suffix = file_path.suffix.lower()
-    
-    try:
-        if suffix == '.md' or suffix == '.txt':
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return f.read()
-                
-        elif suffix == '.pdf':
-            from pypdf import PdfReader
-            reader = PdfReader(file_path)
-            text = []
-            for page in reader.pages:
-                text.append(page.extract_text() or "")
-            return "\n".join(text)
-            
-        elif suffix == '.docx':
-            from docx import Document
-            doc = Document(file_path)
-            return "\n".join([p.text for p in doc.paragraphs])
-            
-        elif suffix == '.epub':
-            import ebooklib
-            from ebooklib import epub
-            from bs4 import BeautifulSoup
-            
-            book = epub.read_epub(str(file_path))
-            chapters = []
-            for item in book.get_items():
-                if item.get_type() == ebooklib.ITEM_DOCUMENT:
-                    soup = BeautifulSoup(item.get_content(), 'html.parser')
-                    chapters.append(soup.get_text())
-            return "\n".join(chapters)
+# --- File Handlers ---
+def _read_text_file(path: Path) -> Optional[str]:
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
 
-        else:
-            print(f"Unsupported format: {suffix}")
-            return None
+def _read_pdf_file(path: Path) -> Optional[str]:
+    from pypdf import PdfReader
+    reader = PdfReader(path)
+    text = []
+    for page in reader.pages:
+        text.append(page.extract_text() or "")
+    return "\n".join(text)
+
+def _read_docx_file(path: Path) -> Optional[str]:
+    from docx import Document
+    doc = Document(path)
+    return "\n".join([p.text for p in doc.paragraphs])
+
+def _read_epub_file(path: Path) -> Optional[str]:
+    import ebooklib
+    from ebooklib import epub
+    from bs4 import BeautifulSoup
+    
+    book = epub.read_epub(str(path))
+    chapters = []
+    for item in book.get_items():
+        if item.get_type() == ebooklib.ITEM_DOCUMENT:
+            soup = BeautifulSoup(item.get_content(), 'html.parser')
+            chapters.append(soup.get_text())
+    return "\n".join(chapters)
+
+FILE_HANDLERS: Dict[str, Callable[[Path], Optional[str]]] = {
+    '.md': _read_text_file,
+    '.txt': _read_text_file,
+    '.pdf': _read_pdf_file,
+    '.docx': _read_docx_file,
+    '.epub': _read_epub_file
+}
+
+def read_file_content(file_path: Any) -> Optional[str]:
+    """Read text from supported file formats."""
+    if isinstance(file_path, str): 
+        file_path = Path(file_path)
+    
+    suffix = file_path.suffix.lower()
+    handler = FILE_HANDLERS.get(suffix)
+    
+    if not handler:
+        logger.warning(f"Unsupported format: {suffix}")
+        return None
+        
+    try:
+        return handler(file_path)
     except Exception as e:
-        print(f"Error reading {file_path}: {e}")
+        logger.error(f"Error reading {file_path}: {e}")
         return None
 
 # --- Engines ---
+# --- Engines ---
 class TTSEngine:
-    def get_voices(self): raise NotImplementedError
-    def generate(self, text, voice, output_path): raise NotImplementedError
+    def get_voices(self) -> List[str]: raise NotImplementedError
+    def generate(self, text: str, voice: str, output_path: str) -> None: raise NotImplementedError
 
 class KokoroEngine(TTSEngine):
     def __init__(self):
-        if not os.path.exists(KOKORO_MODEL) or not os.path.exists(KOKORO_VOICES):
-            # Try to load from package resources if used as library? For now, simplistic check.
+        if not os.path.exists(CONF.kokoro_model_path) or not os.path.exists(CONF.kokoro_voices_path):
              pass 
         try:
             from kokoro_onnx import Kokoro
-            # Fallback pathing for library usage?
-            # If we are in library mode, we might not have models in cwd.
-            # Ideally models should be downloaded or paths configures.
-            # We will assume user manages models for now or they are in valid path.
-            if os.path.exists(KOKORO_MODEL):
-                self.kokoro = Kokoro(KOKORO_MODEL, KOKORO_VOICES)
+            if os.path.exists(CONF.kokoro_model_path):
+                self.kokoro = Kokoro(CONF.kokoro_model_path, CONF.kokoro_voices_path)
             else:
-                 raise FileNotFoundError(f"Kokoro model not found at {KOKORO_MODEL}")
+                 raise FileNotFoundError(f"Kokoro model not found at {CONF.kokoro_model_path}")
         except ImportError:
             raise ImportError("kokoro-onnx not installed.")
     
-    def get_voices(self): return self.kokoro.get_voices()
-    def generate(self, text, voice, output_path):
+    def get_voices(self) -> List[str]: return self.kokoro.get_voices()
+    def generate(self, text: str, voice: str, output_path: str) -> None:
         samples, sample_rate = self.kokoro.create(text, voice=voice, speed=1.0, lang="en-us")
         sf.write(output_path, samples, sample_rate)
 
@@ -120,8 +161,8 @@ class Pyttsx3Engine(TTSEngine):
     def __init__(self):
         import pyttsx3
         self.engine = pyttsx3.init()
-    def get_voices(self): return [v.name for v in self.engine.getProperty('voices')]
-    def generate(self, text, voice, output_path):
+    def get_voices(self) -> List[str]: return [v.name for v in self.engine.getProperty('voices')]
+    def generate(self, text: str, voice: str, output_path: str) -> None:
         voices = self.engine.getProperty('voices')
         selected_voice = None
         for v in voices:
@@ -134,13 +175,13 @@ class Pyttsx3Engine(TTSEngine):
 
 class PiperEngine(TTSEngine):
     def __init__(self):
-        if not os.path.exists(PIPER_MODEL): raise FileNotFoundError(f"Piper model not found at {PIPER_MODEL}")
+        if not os.path.exists(CONF.piper_model_path): raise FileNotFoundError(f"Piper model not found at {CONF.piper_model_path}")
         try:
             from piper import PiperVoice
-            self.voice = PiperVoice.load(PIPER_MODEL, config_path=PIPER_CONFIG)
+            self.voice = PiperVoice.load(CONF.piper_model_path, config_path=CONF.piper_config_path)
         except ImportError: raise ImportError("piper-tts not installed.")
-    def get_voices(self): return ["default"]
-    def generate(self, text, voice, output_path):
+    def get_voices(self) -> List[str]: return ["default"]
+    def generate(self, text: str, voice: str, output_path: str) -> None:
         with open(output_path, "wb") as wav_file:
             self.voice.synthesize(text, wav_file)
 
@@ -148,8 +189,8 @@ class GTTSEngine(TTSEngine):
     def __init__(self):
         from gtts import gTTS
         self.gTTS = gTTS
-    def get_voices(self): return ["en", "fr", "es"]
-    def generate(self, text, voice, output_path):
+    def get_voices(self) -> List[str]: return ["en", "fr", "es"]
+    def generate(self, text: str, voice: str, output_path: str) -> None:
         tts = self.gTTS(text=text, lang=voice if voice in self.get_voices() else "en")
         tts.save(output_path)
 
@@ -159,8 +200,8 @@ class F5TTSEngine(TTSEngine):
         from importlib.resources import files
         self.files = files
         self.f5tts = F5TTS()
-    def get_voices(self): return ["default"]
-    def generate(self, text, voice, output_path):
+    def get_voices(self) -> List[str]: return ["default"]
+    def generate(self, text: str, voice: str, output_path: str) -> None:
         ref_file = voice
         if voice == "default" or not os.path.exists(voice):
              ref_file = str(self.files("f5_tts").joinpath("infer/examples/basic/basic_ref_en.wav"))
@@ -170,17 +211,17 @@ class XTTSEngine(TTSEngine):
     def __init__(self):
         from TTS.api import TTS
         self.tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=False)
-    def get_voices(self): return ["default"]
-    def generate(self, text, voice, output_path):
+    def get_voices(self) -> List[str]: return ["default"]
+    def generate(self, text: str, voice: str, output_path: str) -> None:
         speaker_wav = voice if os.path.exists(voice) else None
         if not speaker_wav: self.tts.tts_to_file(text=text, file_path=output_path, speaker=self.tts.speakers[0], language="en")
         else: self.tts.tts_to_file(text=text, file_path=output_path, speaker_wav=speaker_wav, language="en")
 
 class FishSpeechEngine(TTSEngine):
-    def get_voices(self): return []
-    def generate(self, text, voice, output_path): raise NotImplementedError("Fish Speech not manually configured.")
+    def get_voices(self) -> List[str]: return []
+    def generate(self, text: str, voice: str, output_path: str) -> None: raise NotImplementedError("Fish Speech not manually configured.")
 
-def get_engine(model_name):
+def get_engine(model_name: str) -> TTSEngine:
     if model_name == "kokoro": return KokoroEngine()
     elif model_name == "pyttsx3": return Pyttsx3Engine()
     elif model_name == "piper": return PiperEngine()
@@ -190,13 +231,14 @@ def get_engine(model_name):
     else: raise ValueError(f"Unknown model: {model_name}")
 
 # --- Worker for Parallel ---
-def process_single_item(item_data):
+def process_single_item(item_data: Tuple[str, str, str, str]) -> Tuple[bool, Optional[str]]:
     text, model_name, voice_name, output_path = item_data
     try:
         engine = get_engine(model_name)
         engine.generate(text, voice_name, output_path)
         return True, None
     except Exception as e:
+        logger.error(f"Error processing item: {e}")
         return False, str(e)
 
 # --- BitVoice Library Class ---
@@ -207,28 +249,28 @@ class BitVoice:
       bv = BitVoice(model='kokoro', voice='af_heart')
       bv.convert_file('book.txt', 'audio.wav')
     """
-    def __init__(self, model="kokoro", voice=None):
+    def __init__(self, model: str = "kokoro", voice: Optional[str] = None):
         self.model = model
         self.voice = voice
-        self.engine = None
-        # Lazy init engine
+        self.engine: Optional[TTSEngine] = None
     
-    def _init_engine(self):
+    def _init_engine(self) -> None:
         if not self.engine:
             self.engine = get_engine(self.model)
-            # Resolve voice default if needed
             if not self.voice:
                 try:
                     voices = self.engine.get_voices()
                     self.voice = "af_heart" if self.model == "kokoro" else (voices[0] if voices else "default")
-                except:
+                except Exception as e:
+                    logger.debug(f"Could not autoset voice: {e}")
                     self.voice = "default"
     
-    def convert_text(self, text, output_path):
+    def convert_text(self, text: str, output_path: str) -> None:
         self._init_engine()
-        self.engine.generate(text, self.voice, output_path)
+        assert self.engine is not None
+        self.engine.generate(text, self.voice or "default", output_path)
 
-    def convert_file(self, input_file, output_path):
+    def convert_file(self, input_file: str, output_path: str) -> None:
         text = read_file_content(input_file)
         if not text:
             raise ValueError(f"Could not read text from {input_file}")
@@ -236,7 +278,7 @@ class BitVoice:
         self.convert_text(cleaned, output_path)
 
 # --- Installation Logic ---
-def install_tool():
+def install_tool() -> None:
     """Install CLI wrapper."""
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
@@ -255,11 +297,12 @@ def install_tool():
         print(f"[SUCCESS] Created wrapper: {wrapper_path}")
         print("Add this directory to your PATH to run 'bitvoice' from anywhere.")
 
-def install_library_package():
+def install_library_package() -> None:
     """Install the current directory as a pip package."""
     # Check venv
     in_venv = (sys.prefix != sys.base_prefix)
     if not in_venv:
+        # We use print here as it is an interactive prompt
         print("Warning: You are NOT running in a virtual environment.")
         confirm = input("Do you want to install 'bitvoice' into your global python environment? [y/N]: ")
         if confirm.lower() != 'y':
@@ -285,31 +328,38 @@ def install_library_package():
     except subprocess.CalledProcessError as e:
         print(f"Installation failed: {e}")
 
-def install_f5_tts_deps():
+def install_f5_tts_deps() -> None:
     """Install heavy dependencies for F5-TTS using library extras."""
     print("Installing F5-TTS dependencies via extras...")
     import subprocess
     try:
-        # We try to install via pip install .[f5] (editable or not depending on context? 
-        # Actually usually just pip install .[f5] works even if already installed editable)
+        # We try to install via pip install .[f5]
         subprocess.check_call([sys.executable, "-m", "pip", "install", ".[f5]"])
         print("\n[SUCCESS] F5-TTS dependencies installed.")
     except subprocess.CalledProcessError as e:
         print(f"Installation failed: {e}")
 
 # --- Main CLI ---
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="BitVoice: Convert text/doc files to Speech.")
     parser.add_argument("--input", "-i", type=str, help="Input directory or single file.")
     parser.add_argument("--output", "-o", type=str, help="Output directory or filename.")
-    parser.add_argument("--model", "-m", type=str, default="kokoro", help="TTS Model.")
+    parser.add_argument("--model", "-m", type=str, default="kokoro", help="TTS Model (kokoro, piper, etc).")
     parser.add_argument("--voice", "-v", type=str, help="Voice name.")
     parser.add_argument("--parallel", "-p", action="store_true", help="Enable parallel processing.")
     parser.add_argument("--install", action="store_true", help="Install CLI wrapper script (Legacy).")
     parser.add_argument("--install-library", action="store_true", help="Install as a Python library.")
     parser.add_argument("--install-f5-tts", action="store_true", help="Install F5-TTS dependencies (Heavy).")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging.")
     
     args = parser.parse_args()
+
+    # Configure Logging
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%H:%M:%S'
+    )
 
     if args.install_f5_tts:
         install_f5_tts_deps()
@@ -330,34 +380,34 @@ def main():
     # Validate inputs
     input_path = Path(args.input)
     if not input_path.exists():
-        print(f"Error: {input_path} not found.")
+        logger.error(f"Error: {input_path} not found.")
         return
         
     is_single_file = input_path.is_file()
     supported_exts = {'.md', '.txt', '.pdf', '.docx', '.epub'}
     
-    files_to_process = []
+    files_to_process: List[Path] = []
     if is_single_file:
          if input_path.suffix.lower() in supported_exts: files_to_process = [input_path]
          else: 
-             print(f"Warning: Unknown extension {input_path.suffix}, trying anyway.")
+             logger.warning(f"Unknown extension {input_path.suffix}, trying anyway.")
              files_to_process = [input_path]
     else:
         for ext in supported_exts:
              files_to_process.extend(input_path.rglob(f"*{ext}"))
              
     if not files_to_process:
-        print("No supported files found.")
+        logger.info("No supported files found.")
         return
 
     # Logic for processing
-    # We need to make sure 'engines_map' validation logic is preserved or adapted.
     try:
         dummy = get_engine(args.model) # Validate model
-        # Get voices
+        # Get voices (try/except for robustness)
         try: 
             available_voices = dummy.get_voices()
-        except: 
+        except Exception as e: 
+            logger.debug(f"Could not get voices: {e}")
             available_voices = ["default"]
             
         voice = args.voice
@@ -365,24 +415,26 @@ def main():
              if args.model == "kokoro": voice = "af_heart"
              elif args.model in ["piper", "f5-tts", "xtts"]: voice = "default"
              else: voice = "default"
+        logger.info(f"Using Model: {args.model}, Voice: {voice}")
     except Exception as e:
-        print(f"Error initializing model {args.model}: {e}")
+        logger.error(f"Error initializing model {args.model}: {e}")
         return
 
     # Cache load
-    if not os.path.exists(CACHE_DIR): os.makedirs(CACHE_DIR)
-    cache = {}
-    if os.path.exists(CACHE_FILE):
+    if not os.path.exists(CONF.CACHE_DIR): os.makedirs(CONF.CACHE_DIR)
+    cache: Dict[str, str] = {}
+    if os.path.exists(CONF.cache_path):
         try:
-            with open(CACHE_FILE, 'rb') as f:
+            with open(CONF.cache_path, 'rb') as f:
                 cache = pickle.load(f)
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not load cache: {e}")
 
-    work_items = []
+    work_items: List[Tuple[str, str, str, str, str, str]] = []
     for file_path in files_to_process:
-        if CACHE_DIR in file_path.parts: continue
-        if args.output and Path(args.output) == file_path: continue
+        # Skip cache files and output files
+        if CONF.CACHE_DIR in file_path.parts: continue
+        if args.output and Path(args.output).resolve() == file_path.resolve(): continue
         
         # Outcome path logic
         if is_single_file and args.output:
@@ -402,20 +454,20 @@ def main():
              cleaned = clean_markdown(content)
              if not cleaned: continue
              
-             f_hash = get_file_hash(cleaned, args.model, voice)
+             f_hash = get_file_hash(cleaned, args.model, str(voice))
              if cache.get(str(file_path)) == f_hash and audio_file.exists():
-                 print(f"Skipping cached: {file_path.name}")
+                 logger.info(f"Skipping cached: {file_path.name}")
                  continue
                  
-             work_items.append((cleaned, args.model, voice, str(audio_file), str(file_path), f_hash))
+             work_items.append((cleaned, args.model, str(voice), str(audio_file), str(file_path), f_hash))
         except Exception as e:
-             print(f"Skipping {file_path}: {e}")
+             logger.error(f"Skipping {file_path}: {e}")
 
     if not work_items: 
-        print("Nothing to do.")
+        logger.info("Nothing to do.")
         return
 
-    print(f"Processing {len(work_items)} items...")
+    logger.info(f"Processing {len(work_items)} items...")
     
     if args.parallel and args.model not in ["f5-tts", "xtts"]:
          from concurrent.futures import ProcessPoolExecutor
@@ -425,14 +477,14 @@ def main():
          results = []
          for w in work_items:
              results.append(process_single_item((w[0], w[1], w[2], w[3])))
-             print(f"Generated {Path(w[3]).name}")
+             logger.info(f"Generated {Path(w[3]).name}")
 
     for i, (ok, err) in enumerate(results):
         if ok: cache[work_items[i][4]] = work_items[i][5]
-        else: print(f"Failed {work_items[i][4]}: {err}")
+        else: logger.error(f"Failed {work_items[i][4]}: {err}")
         
-    with open(CACHE_FILE, 'wb') as f: pickle.dump(cache, f)
-    print("Done.")
+    with open(CONF.cache_path, 'wb') as f: pickle.dump(cache, f)
+    logger.info("Done.")
 
 if __name__ == "__main__":
     main()
