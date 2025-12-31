@@ -274,6 +274,20 @@ def install_library_package():
     except subprocess.CalledProcessError as e:
         print(f"Installation failed: {e}")
 
+def install_f5_tts_deps():
+    """Install heavy dependencies for F5-TTS."""
+    print("Installing F5-TTS dependencies (approx. 2-3GB)...")
+    import subprocess
+    try:
+        # Installing f5-tts and touch/torchaudio. 
+        # We omit specific versions for torch to ensure compatibility with system, 
+        # but stick to f5-tts version if familiar or latest.
+        packages = ["f5-tts", "torch", "torchaudio"] 
+        subprocess.check_call([sys.executable, "-m", "pip", "install"] + packages)
+        print("\n[SUCCESS] F5-TTS dependencies installed.")
+    except subprocess.CalledProcessError as e:
+        print(f"Installation failed: {e}")
+
 # --- Main CLI ---
 def main():
     parser = argparse.ArgumentParser(description="BitVoice: Convert text/doc files to Speech.")
@@ -284,8 +298,13 @@ def main():
     parser.add_argument("--parallel", "-p", action="store_true", help="Enable parallel processing.")
     parser.add_argument("--install", action="store_true", help="Install CLI wrapper script (Legacy).")
     parser.add_argument("--install-library", action="store_true", help="Install as a Python library.")
+    parser.add_argument("--install-f5-tts", action="store_true", help="Install F5-TTS dependencies (Heavy).")
     
     args = parser.parse_args()
+
+    if args.install_f5_tts:
+        install_f5_tts_deps()
+        return
 
     if args.install_library:
         install_library_package()

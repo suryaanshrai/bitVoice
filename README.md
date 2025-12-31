@@ -1,6 +1,6 @@
-# BitVoice (MdVocalizer)
+# BitVoice
 
-Convert Markdown files into natural-sounding speech using advanced local AI models.
+Convert documents (Markdown, PDF, EPUB, Word, Text) into natural-sounding speech using advanced local AI models.
 
 ## Features
 - **Models**: Kokoro, F5-TTS (Voice Cloning), Piper, XTTS v2, pyttsx3, gTTS.
@@ -33,6 +33,9 @@ python bitvoice.py --install
 
 # Install as a proper Python library (Recommended)
 python bitvoice.py --install-library
+
+# Install F5-TTS Dependencies (Optional, ~3GB)
+python bitvoice.py --install-f5-tts
 ```
 
 ### Usage as a Library
@@ -78,6 +81,23 @@ bitvoice --input README.md --output intro.wav
 # Parallel processing with Piper (Fast)
 bitvoice --model piper --input ./books --parallel
 
+
 # Voice Cloning with F5-TTS
 bitvoice --model f5-tts --voice ./my_voice_sample.wav --input ./script.md
 ```
+
+## Development & Testing
+The project includes a comprehensive test suite using `pytest`.
+
+```bash
+# Run Unit and Integration tests
+python -m pytest tests/
+
+# Run specific test file
+python -m pytest tests/test_unit.py
+```
+
+### CI/CD Pipeline
+Automated via GitHub Actions (`.github/workflows/ci-cd.yml`):
+1.  **Test**: Runs `pytest` on every push to `main` and pull requests.
+2.  **Deploy**: If tests pass on `main`, builds and pushes the Docker image to Docker Hub (`suryaanshrai515/bitvoice:latest`).

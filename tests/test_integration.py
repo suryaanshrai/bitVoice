@@ -46,6 +46,12 @@ def test_cli_install_library_flag(mock_install_lib):
     bitvoice.main()
     mock_install_lib.assert_called_once()
 
+@patch("sys.argv", ["bitvoice.py", "--install-f5-tts"])
+@patch("bitvoice.install_f5_tts_deps")
+def test_cli_install_f5_flag(mock_install_f5):
+    bitvoice.main()
+    mock_install_f5.assert_called_once()
+
 @patch("subprocess.check_call")
 @patch("sys.executable", "/usr/bin/python3")
 @patch("builtins.input", return_value="y")
