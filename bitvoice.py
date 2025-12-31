@@ -240,9 +240,20 @@ def install_tool():
     """Install CLI wrapper."""
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
-    # ... (Keep existing script wrapper logic if desired, or prefer library install now)
-    # The user asked for "Library installation". 
-    pass # Replaced by install_library_package
+    
+    if os.name == 'nt':
+        wrapper_path = os.path.join(script_dir, "bitvoice.bat")
+        with open(wrapper_path, "w") as f:
+            f.write(f'@echo off\n"{sys.executable}" "{script_path}" %*')
+        print(f"[SUCCESS] Created wrapper: {wrapper_path}")
+        print("Add this directory to your PATH to run 'bitvoice' from anywhere.")
+    else:
+        wrapper_path = os.path.join(script_dir, "bitvoice")
+        with open(wrapper_path, "w") as f:
+            f.write(f'#!/bin/bash\nexec "{sys.executable}" "{script_path}" "$@"')
+        os.chmod(wrapper_path, 0o755)
+        print(f"[SUCCESS] Created wrapper: {wrapper_path}")
+        print("Add this directory to your PATH to run 'bitvoice' from anywhere.")
 
 def install_library_package():
     """Install the current directory as a pip package."""
