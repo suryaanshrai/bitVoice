@@ -32,7 +32,11 @@ pip install -r requirements.txt
 python bitvoice.py --install
 
 # Install as a proper Python library (Recommended)
+# *Interactive*: Prompts to optionally install F5-TTS extras.
 python bitvoice.py --install-library
+
+# Manual Install (Advanced)
+pip install -e .[f5]
 
 # Install F5-TTS Dependencies (Optional, ~3GB)
 python bitvoice.py --install-f5-tts

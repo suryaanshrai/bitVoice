@@ -54,11 +54,20 @@ def test_cli_install_f5_flag(mock_install_f5):
 
 @patch("subprocess.check_call")
 @patch("sys.executable", "/usr/bin/python3")
-@patch("builtins.input", return_value="y")
-def test_install_library_package_function(mock_input, mock_check_call):
+@patch("builtins.input", side_effect=["y", "n"]) # 1. Venv confirm (y), 2. F5 confirm (n)
+def test_install_library_package_function_no_f5(mock_input, mock_check_call):
     with patch("sys.prefix", "/usr"), patch("sys.base_prefix", "/usr"):
         bitvoice.install_library_package()
         mock_check_call.assert_called_with(["/usr/bin/python3", "-m", "pip", "install", "-e", "."])
+
+@patch("subprocess.check_call")
+@patch("sys.executable", "/usr/bin/python3")
+@patch("builtins.input", side_effect=["y", "y"]) # 1. Venv confirm (y), 2. F5 confirm (y)
+def test_install_library_package_function_with_f5(mock_input, mock_check_call):
+    with patch("sys.prefix", "/usr"), patch("sys.base_prefix", "/usr"):
+        bitvoice.install_library_package()
+        # Should verify call includes .[f5]
+        mock_check_call.assert_called_with(["/usr/bin/python3", "-m", "pip", "install", "-e", ".[f5]"])
 
 @patch("builtins.open", new_callable=mock_open)
 @patch("os.chmod")
@@ -70,31 +79,6 @@ def test_install_tool_function(mock_chmod, mock_file):
         mock_file().write.assert_called()
         args = mock_file().write.call_args[0][0]
         assert "#!/bin/bash" in args
-
-@patch("sys.argv", ["bitvoice.py", "--input", "test.md", "--model", "kokoro", "--voice", "af_heart"])
-@patch("bitvoice.Path.exists", return_value=True)
-@patch("bitvoice.Path.is_file", return_value=True) # It IS a file
-@patch("bitvoice.read_file_content", return_value="Test Content")
-@patch("bitvoice.get_engine")
-def test_main_cli_execution_flow(mock_get_eng, mock_read, mock_isfile, mock_exists):
-    # Fixed Path issues by mocking Path object properties or ensure logic simpler
-    # The previous error was ValueError: WindowsPath('.') has an empty name
-    # This happens if code does Path(".") and expects it to be a file with stem.
-    # In this test we pass "test.md", so Path("test.md").
-    
-    # We must properly mock Path so that input_path.suffix works
-    # However, since we mock Path class in the code via `bitvoice.Path`, it might get messy.
-    # Better to NOT mock Path class globally, but rely on real Path for string inputs.
-    # But we want to avoid disk I/O.
-    # Let's rely on `read_file_content` mock and `is_file`.
-    
-    # Actually, bitvoice.py uses `Path(args.input)`. If we mock `bitvoice.Path`, `Path("test.md")` returns a MagicMock.
-    # MagicMock().suffix is another MagicMock.
-    # We should let Path be real, but mock `.exists()` and `.is_file()` on the instance?
-    # No, hard to patch instance methods of real classes globally easily without side effects.
-    
-    # Alternative strategy: Use real files (via tmp_path) and mock only the expensive parts (engine, read_file if needed).
-    pass 
 
 # Rewriting test_main_cli_execution_flow to use real Path but mocked engine
 @patch("bitvoice.get_engine")

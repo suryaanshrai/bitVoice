@@ -28,5 +28,8 @@ setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
+    extras_require={
+        "f5": ["f5-tts", "torch", "torchaudio"],
+    },
     python_requires='>=3.8',
 )

@@ -267,23 +267,32 @@ def install_library_package():
             return
 
     print("Installing bitvoice as a library (editable mode)...")
+    
+    install_f5 = False
+    f5_confirm = input("Do you want to install optional F5-TTS support (Heavy, ~3GB)? [y/N]: ")
+    if f5_confirm.lower() == 'y': install_f5 = True
+
     import subprocess
     try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", "."])
+        cmd = [sys.executable, "-m", "pip", "install", "-e"]
+        if install_f5:
+             cmd.append(".[f5]")
+        else:
+             cmd.append(".")
+             
+        subprocess.check_call(cmd)
         print("\nSuccess! You can now use 'bitvoice' as a command or 'import bitvoice' in Python.")
     except subprocess.CalledProcessError as e:
         print(f"Installation failed: {e}")
 
 def install_f5_tts_deps():
-    """Install heavy dependencies for F5-TTS."""
-    print("Installing F5-TTS dependencies (approx. 2-3GB)...")
+    """Install heavy dependencies for F5-TTS using library extras."""
+    print("Installing F5-TTS dependencies via extras...")
     import subprocess
     try:
-        # Installing f5-tts and touch/torchaudio. 
-        # We omit specific versions for torch to ensure compatibility with system, 
-        # but stick to f5-tts version if familiar or latest.
-        packages = ["f5-tts", "torch", "torchaudio"] 
-        subprocess.check_call([sys.executable, "-m", "pip", "install"] + packages)
+        # We try to install via pip install .[f5] (editable or not depending on context? 
+        # Actually usually just pip install .[f5] works even if already installed editable)
+        subprocess.check_call([sys.executable, "-m", "pip", "install", ".[f5]"])
         print("\n[SUCCESS] F5-TTS dependencies installed.")
     except subprocess.CalledProcessError as e:
         print(f"Installation failed: {e}")
