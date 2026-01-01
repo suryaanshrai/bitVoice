@@ -19,6 +19,9 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Set HF_HOME early so it persists for both build and runtime
+ENV HF_HOME=/app/models/huggingface
+
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
@@ -37,13 +40,12 @@ RUN mkdir -p /app/models/piper && \
     wget -q -O /app/models/piper/en_US-lessac-medium.onnx.json "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
 
 # Bake in Chatterbox Models
-# Triggers download to default cache locations (~/.cache/huggingface/hub/...)
+# Triggers download to HF_HOME location defined above
 RUN python3 -c "from chatterbox.tts import ChatterboxTTS; from chatterbox.tts_turbo import ChatterboxTurboTTS; ChatterboxTTS.from_pretrained(device='cpu'); ChatterboxTurboTTS.from_pretrained(device='cpu')"
 
 # Copy application code
 COPY . .
 
-# Set entrypoint to just bash for debugging, or directly to bitvoice if preferred. 
-# User wanted it to be treated as container-only app.
-ENTRYPOINT ["python", "/app/bitvoice.py"]
+# Set entrypoint to run the module
+ENTRYPOINT ["python", "-m", "bitvoice"]
 CMD ["--help"]

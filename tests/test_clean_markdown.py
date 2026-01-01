@@ -23,7 +23,8 @@ This is the content."""
         filename = "MyFile.md"
         cleaned = clean_markdown(content, filename=filename)
         # Should be at the start
-        self.assertTrue(cleaned.startswith(filename))
+        # Should start with header MyFile (header syntax removed)
+        self.assertTrue(cleaned.startswith("MyFile"))
         self.assertIn("Some content", cleaned)
 
     def test_filename_and_frontmatter(self):
@@ -33,7 +34,7 @@ meta: data
 Body text."""
         cleaned = clean_markdown(content, filename="Doc.md")
         self.assertNotIn("meta: data", cleaned)
-        self.assertTrue(cleaned.startswith("Doc") or cleaned.startswith("# Doc"))
+        self.assertTrue(cleaned.startswith("Doc"))
         self.assertNotIn("Doc.md", cleaned)
         self.assertIn("Body text", cleaned)
 

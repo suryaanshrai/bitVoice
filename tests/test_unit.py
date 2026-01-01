@@ -8,14 +8,10 @@ from typing import Generator, Tuple
 # Add parent directory to path so we can import bitvoice
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import bitvoice
-from bitvoice import (
-    clean_markdown,
-    get_file_hash,
-    read_file_content,
-    process_single_item,
-    CONF
-)
+from bitvoice.utils.text import clean_markdown
+from bitvoice.utils.files import get_file_hash, read_file_content
+from bitvoice.cli import process_single_item
+from bitvoice.config import CONF
 
 # --- Fixtures ---
 @pytest.fixture
@@ -122,24 +118,30 @@ def test_read_unsupported(tmp_path: Path) -> None:
     assert read_file_content(f) is None
 
 # --- Unit Tests: Worker Logic ---
-@patch("bitvoice.get_engine")
+@patch("bitvoice.cli.get_engine")
 def test_process_single_item_success(mock_get_eng: MagicMock) -> None:
     mock_eng = MagicMock()
     mock_get_eng.return_value = mock_eng
     
-    item = ("text", "kokoro", "voice", "out.wav")
-    success, err = process_single_item(item)
+    item = ("text", "piper", "voice", "out.wav")
+    
+    # Patch the global worker engine in cli to be None so it tries to load
+    # Or set it to our mock
+    with patch("bitvoice.cli._worker_engine", mock_eng):
+        success, err = process_single_item(item)
     
     assert success is True
     assert err is None
     mock_eng.generate.assert_called_with("text", "voice", "out.wav")
 
-@patch("bitvoice.get_engine")
+@patch("bitvoice.cli.get_engine")
 def test_process_single_item_failure(mock_get_eng: MagicMock) -> None:
+    # Scenario: _worker_engine is None, and get_engine fails
     mock_get_eng.side_effect = Exception("Engine Load Failed")
     
-    item = ("text", "kokoro", "voice", "out.wav")
-    success, err = process_single_item(item)
+    item = ("text", "piper", "voice", "out.wav")
+    with patch("bitvoice.cli._worker_engine", None):
+        success, err = process_single_item(item)
     
     assert success is False
     assert "Engine Load Failed" in (err or "")
@@ -147,4 +149,3 @@ def test_process_single_item_failure(mock_get_eng: MagicMock) -> None:
 # --- Unit Tests: Settings ---
 def test_settings_paths() -> None:
     assert CONF.cache_path.endswith("cache.pkl")
-    assert CONF.kokoro_model_path.endswith("kokoro-v1.0.onnx")
