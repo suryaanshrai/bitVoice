@@ -279,7 +279,7 @@ class BitVoice:
 
 # --- Installation Logic ---
 def install_tool() -> None:
-    """Install CLI wrapper."""
+    """Install CLI wrapper and add to PATH."""
     script_path = os.path.abspath(__file__)
     script_dir = os.path.dirname(script_path)
     
@@ -288,14 +288,74 @@ def install_tool() -> None:
         with open(wrapper_path, "w") as f:
             f.write(f'@echo off\n"{sys.executable}" "{script_path}" %*')
         print(f"[SUCCESS] Created wrapper: {wrapper_path}")
-        print("Add this directory to your PATH to run 'bitvoice' from anywhere.")
+        
+        # Add to PATH via Registry
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Environment', 0, winreg.KEY_ALL_ACCESS)
+            try:
+                current_path, _ = winreg.QueryValueEx(key, 'Path')
+            except FileNotFoundError:
+                current_path = ""
+            
+            if script_dir.lower() not in current_path.lower().split(';'):
+                new_path = f"{current_path};{script_dir}" if current_path else script_dir
+                winreg.SetValueEx(key, 'Path', 0, winreg.REG_EXPAND_SZ, new_path)
+                print(f"[SUCCESS] Added {script_dir} to User PATH.")
+                print("Note: You may need to restart your terminal for changes to take effect.")
+            else:
+                 print(f"[INFO] {script_dir} is already in PATH.")
+            winreg.CloseKey(key)
+        except Exception as e:
+            print(f"[ERROR] Could not update PATH registry: {e}")
+            print(f"Please manually add {script_dir} to your environment variables.")
+
     else:
         wrapper_path = os.path.join(script_dir, "bitvoice")
         with open(wrapper_path, "w") as f:
             f.write(f'#!/bin/bash\nexec "{sys.executable}" "{script_path}" "$@"')
         os.chmod(wrapper_path, 0o755)
         print(f"[SUCCESS] Created wrapper: {wrapper_path}")
-        print("Add this directory to your PATH to run 'bitvoice' from anywhere.")
+        
+        # Add to PATH on Linux/Mac
+        shell = os.environ.get("SHELL", "")
+        home = os.path.expanduser("~")
+        config_file = None
+        
+        if "zsh" in shell:
+            config_file = os.path.join(home, ".zshrc")
+        elif "bash" in shell:
+            # On Linux, .bashrc is common. On Mac, .bash_profile might be used.
+            if os.path.exists(os.path.join(home, ".bash_profile")):
+                config_file = os.path.join(home, ".bash_profile")
+            else:
+                config_file = os.path.join(home, ".bashrc")
+        else:
+            # Fallback or other shells (profile)
+            config_file = os.path.join(home, ".profile")
+
+        export_line = f'export PATH="$PATH:{script_dir}"'
+        
+        if config_file:
+            try:
+                # Check if already exists
+                content = ""
+                if os.path.exists(config_file):
+                    with open(config_file, "r") as f:
+                        content = f.read()
+                
+                if script_dir not in content:
+                    with open(config_file, "a") as f:
+                        f.write(f"\n# Added by BitVoice\n{export_line}\n")
+                    print(f"[SUCCESS] Added to PATH in {config_file}")
+                    print(f"Run 'source {config_file}' or restart your terminal.")
+                else:
+                    print(f"[INFO] Already in PATH in {config_file}")
+            except Exception as e:
+                print(f"[ERROR] Could not update {config_file}: {e}")
+                print(f"Please manually run: {export_line}")
+        else:
+             print(f"Could not detect shell config file. Please manually run: {export_line}")
 
 def install_library_package() -> None:
     """Install the current directory as a pip package."""
