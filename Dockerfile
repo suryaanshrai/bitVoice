@@ -1,4 +1,4 @@
-FROM python:3.10-slim-bullseye
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
 
 # Install system dependencies
 # git for installing python packages from git
@@ -19,20 +19,31 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
 # Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache "numpy<2" setuptools wheel "Cython<3"
+# Install spacy-pkuseg (Python 3.11 compatible fork) instead of broken pkuseg
+RUN uv pip install --system --no-cache spacy-pkuseg
+RUN uv pip install --system --no-cache --no-build-isolation --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.txt
+# Install Chatterbox without dependencies (since we used spacy-pkuseg instead of pkuseg)
 
-# Bake in Kokoro Model
-# Create models directory and download files
-RUN mkdir -p /app/models && \
-    wget -q -O /app/models/kokoro-v1.0.onnx "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx" && \
-    wget -q -O /app/models/voices-v1.0.bin "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+
+# Bake in Piper Model (en_US-lessac-medium)
+RUN mkdir -p /app/models/piper && \
+    wget -q -O /app/models/piper/en_US-lessac-medium.onnx "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx" && \
+    wget -q -O /app/models/piper/en_US-lessac-medium.onnx.json "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+
+# Bake in Chatterbox Models
+# Triggers download to default cache locations (~/.cache/huggingface/hub/...)
+RUN python3 -c "from chatterbox.tts import ChatterboxTTS; from chatterbox.tts_turbo import ChatterboxTurboTTS; ChatterboxTTS.from_pretrained(device='cpu'); ChatterboxTurboTTS.from_pretrained(device='cpu')"
 
 # Copy application code
 COPY . .
 
 # Set entrypoint to just bash for debugging, or directly to bitvoice if preferred. 
 # User wanted it to be treated as container-only app.
-ENTRYPOINT ["python", "bitvoice.py"]
+ENTRYPOINT ["python", "/app/bitvoice.py"]
 CMD ["--help"]

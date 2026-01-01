@@ -1,8 +1,15 @@
 #!/bin/bash
+set -e
+
+# Check for Docker
+if ! command -v docker &> /dev/null; then
+    echo "Error: Docker is not installed or not in PATH."
+    exit 1
+fi
 
 echo "Setting up BitVoice alias..."
 
-ALIAS_CMD='bitvoice() { docker run --rm -v "$(pwd):/workspace" -w /workspace suryaanshrai515/bitvoice:latest "$@"; }'
+ALIAS_CMD='bitvoice() { docker run --gpus all --rm -v bitvoice_models:/app/models -v "$(pwd):/workspace" -w /workspace suryaanshrai515/bitvoice:latest "$@"; }'
 export -f bitvoice
 
 # Detect shell
@@ -16,22 +23,23 @@ elif [ "$SHELL_NAME" = "zsh" ]; then
     RC_FILE="$HOME/.zshrc"
 fi
 
-echo "BitVoice function is available in this session (if sourced)."
+echo "✅ BitVoice function is available in this session (if sourced)."
 
 if [ -n "$RC_FILE" ]; then
-    read -p "Do you want to add this alias to $RC_FILE? (y/n) " -n 1 -r
+    # Use /dev/tty for input if inside a pipe or script
+    read -p "Do you want to add this alias to $RC_FILE? (y/n) " -n 1 -r < /dev/tty || true
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         if grep -q "bitvoice()" "$RC_FILE"; then
-             echo "Alias already exists in $RC_FILE"
+             echo "Info: Alias already exists in $RC_FILE"
         else
              echo "" >> "$RC_FILE"
              echo "# BitVoice Alias" >> "$RC_FILE"
              echo "$ALIAS_CMD" >> "$RC_FILE"
-             echo "Added to $RC_FILE. Please restart your shell or run 'source $RC_FILE'."
+             echo "✅ Added to $RC_FILE. Please restart your shell or run 'source $RC_FILE'."
         fi
     fi
 else
-    echo "Could not detect shell configuration file. Please manually add:"
+    echo "Warning: Could not detect shell configuration file. Please manually add:"
     echo "$ALIAS_CMD"
 fi
