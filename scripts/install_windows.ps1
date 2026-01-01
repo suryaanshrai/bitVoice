@@ -6,7 +6,7 @@ function bitvoice {
     # Get current directory
     `$localDir = Get-Location
     # Run docker with volume mount
-    docker run --rm -v "`$localDir`:/workspace" -w /workspace bitvoice:latest @args
+    docker run --rm -v "`$localDir`:/workspace" -w /workspace suryaanshrai515/bitvoice:latest @args
 }
 "@
 

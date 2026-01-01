@@ -2,7 +2,7 @@
 
 echo "Setting up BitVoice alias..."
 
-ALIAS_CMD='bitvoice() { docker run --rm -v "$(pwd):/workspace" -w /workspace bitvoice:latest "$@"; }'
+ALIAS_CMD='bitvoice() { docker run --rm -v "$(pwd):/workspace" -w /workspace suryaanshrai515/bitvoice:latest "$@"; }'
 export -f bitvoice
 
 # Detect shell

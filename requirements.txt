@@ -1,4 +1,4 @@
-kokoro-onnx==0.4.9
+kokoro-onnx<0.4.0
 soundfile==0.13.1
 pyttsx3==2.99
 gTTS==2.5.4
@@ -8,7 +8,7 @@ pypdf==6.5.0
 python-docx==1.2.0
 EbookLib==0.20
 beautifulsoup4==4.14.3
-numpy==2.3.5
+numpy<2
 pytest==8.3.4
 f5-tts
 torch==2.5.1

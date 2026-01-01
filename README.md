@@ -19,32 +19,36 @@ Convert documents (Markdown, PDF, EPUB, Word, Text) into natural-sounding speech
 
 ## 🚀 Quick Start
 
-### 1. Build the Image
-The image includes Kokoro and Piper models pre-downloaded.
-```bash
-docker build -t bitvoice:latest .
-```
+## 🚀 Quick Start
 
-### 2. Install Alias
-We provide scripts to set up a convenient `bitvoice` command that runs the Docker container and mounts your current directory.
+### 1. Install Alias
+We provide scripts to set up a convenient `bitvoice` command. This will automatically pull the latest ready-to-use image from Docker Hub (`suryaanshrai515/bitvoice:latest`).
 
 **Windows (Powershell)**:
 ```powershell
-.\scripts\install_windows.ps1
+iex (irm https://raw.githubusercontent.com/suryaanshrai/bitVoice/main/scripts/install_windows.ps1)
 ```
 
 **Linux / macOS**:
 ```bash
-source ./scripts/install_linux.sh
-# or ./scripts/install_mac.sh
+curl -fsSL https://raw.githubusercontent.com/suryaanshrai/bitVoice/main/scripts/install_linux.sh | bash
+# or for macOS
+# curl -fsSL https://raw.githubusercontent.com/suryaanshrai/bitVoice/main/scripts/install_mac.sh | bash
 ```
 
-### 3. Run
+### 2. Run
 Now you can use `bitvoice` just like a local tool. It works on files in your current directory.
 
 ```bash
 # Convert a file
 bitvoice --input README.md --output intro.wav
+```
+
+### (Optional) Build Locally
+If you prefer to build the image yourself:
+```bash
+docker build -t suryaanshrai515/bitvoice:latest .
+```
 
 # Convert a folder using Piper (Fast)
 bitvoice --model piper --input ./books --parallel
@@ -87,7 +91,7 @@ bitvoice --model f5-tts --voice ./my_reference_audio.wav --input ./script.txt
 **Using a Specific Kokoro Voice**:
 ```bash
 bitvoice --model kokoro --voice af_bella --input book.txt
-```
+```ī
 
 ## Development
 
