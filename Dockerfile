@@ -20,8 +20,6 @@ RUN mkdir -p /app/models /app/output /app/caches
 
 # Copy application code
 COPY bitvoice.py /app/bitvoice.py
-# Copy models if they exist locally (user can also mount them)
-COPY models/ /app/models/
 
 ENTRYPOINT ["python", "bitvoice.py"]
 CMD ["--help"]
