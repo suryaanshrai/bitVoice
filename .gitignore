@@ -48,3 +48,10 @@ models/*.pt
 
 # Temporary files
 *.log
+
+# Generated Wrappers
+bitvoice.bat
+bitvoice
+
+# Models directory
+models/

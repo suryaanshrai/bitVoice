@@ -134,6 +134,25 @@ def read_file_content(file_path: Any) -> Optional[str]:
         return None
 
 # --- Engines ---
+# --- Download Utils ---
+def download_file(url: str, dest_path: str) -> None:
+    import urllib.request
+    
+    logger.info(f"Downloading {url} to {dest_path}...")
+    try:
+        def progress(count, block_size, total_size):
+            percent = int(count * block_size * 100 / total_size)
+            if percent % 10 == 0:
+                print(f"\rDownloading: {percent}%", end="")
+        
+        urllib.request.urlretrieve(url, dest_path, progress)
+        print("\rDownload Complete!      ")
+        logger.info(f"Downloaded {dest_path}")
+    except Exception as e:
+        logger.error(f"Failed to download {url}: {e}")
+        if os.path.exists(dest_path): os.remove(dest_path)
+        raise
+
 # --- Engines ---
 class TTSEngine:
     def get_voices(self) -> List[str]: raise NotImplementedError
@@ -141,8 +160,17 @@ class TTSEngine:
 
 class KokoroEngine(TTSEngine):
     def __init__(self):
-        if not os.path.exists(CONF.kokoro_model_path) or not os.path.exists(CONF.kokoro_voices_path):
-             pass 
+        # Auto-download model if missing
+        if not os.path.exists(CONF.kokoro_model_path):
+             os.makedirs(os.path.dirname(CONF.kokoro_model_path), exist_ok=True)
+             logger.info("Kokoro model not found. Downloading...")
+             download_file("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx", CONF.kokoro_model_path)
+
+        if not os.path.exists(CONF.kokoro_voices_path):
+             os.makedirs(os.path.dirname(CONF.kokoro_voices_path), exist_ok=True)
+             logger.info("Kokoro voices not found. Downloading...")
+             download_file("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin", CONF.kokoro_voices_path)
+
         try:
             from kokoro_onnx import Kokoro
             if os.path.exists(CONF.kokoro_model_path):
@@ -175,6 +203,16 @@ class Pyttsx3Engine(TTSEngine):
 
 class PiperEngine(TTSEngine):
     def __init__(self):
+        # Auto-download model if missing
+        if not os.path.exists(CONF.piper_model_path):
+            os.makedirs(os.path.dirname(CONF.piper_model_path), exist_ok=True)
+            logger.info("Piper model not found. Downloading default (en_US-lessac-medium)...")
+            download_file("https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx", CONF.piper_model_path)
+        
+        if not os.path.exists(CONF.piper_config_path):
+            os.makedirs(os.path.dirname(CONF.piper_config_path), exist_ok=True)
+            download_file("https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json", CONF.piper_config_path)
+
         if not os.path.exists(CONF.piper_model_path): raise FileNotFoundError(f"Piper model not found at {CONF.piper_model_path}")
         try:
             from piper import PiperVoice
@@ -529,19 +567,45 @@ def main() -> None:
 
     logger.info(f"Processing {len(work_items)} items...")
     
-    if args.parallel and args.model not in ["f5-tts", "xtts"]:
-         from concurrent.futures import ProcessPoolExecutor
-         with ProcessPoolExecutor() as executor:
-             results = list(executor.map(process_single_item, [(w[0], w[1], w[2], w[3]) for w in work_items]))
-    else:
-         results = []
-         for w in work_items:
-             results.append(process_single_item((w[0], w[1], w[2], w[3])))
-             logger.info(f"Generated {Path(w[3]).name}")
+    results = [None] * len(work_items)
+    total_items = len(work_items)
 
-    for i, (ok, err) in enumerate(results):
-        if ok: cache[work_items[i][4]] = work_items[i][5]
-        else: logger.error(f"Failed {work_items[i][4]}: {err}")
+    if args.parallel and args.model not in ["f5-tts", "xtts"]:
+         from concurrent.futures import ProcessPoolExecutor, as_completed
+         with ProcessPoolExecutor() as executor:
+             # Submit all tasks
+             futures = {executor.submit(process_single_item, (w[0], w[1], w[2], w[3])): i for i, w in enumerate(work_items)}
+             
+             for future in as_completed(futures):
+                 i = futures[future]
+                 file_name = Path(work_items[i][4]).name
+                 try:
+                     res = future.result()
+                     results[i] = res
+                     status = "Success" if res[0] else "Failed"
+                     logger.info(f"[{len([x for x in results if x])}/{total_items}] {status}: {file_name}")
+                 except Exception as exc:
+                     logger.error(f"[{len([x for x in results if x])}/{total_items}] Exception processing {file_name}: {exc}")
+                     results[i] = (False, str(exc))
+    else:
+         for i, w in enumerate(work_items):
+             file_name = Path(w[4]).name
+             logger.info(f"[{i+1}/{total_items}] Switch Processing: {file_name}")
+             res = process_single_item((w[0], w[1], w[2], w[3]))
+             results[i] = res
+             if res[0]:
+                 logger.info(f"    -> Generated: {Path(w[3]).name}")
+             else:
+                 logger.error(f"    -> Failed: {res[1]}")
+
+    logger.info("--- Summary ---")
+    for i, res in enumerate(results):
+        if not res: continue # Should not happen
+        ok, err = res
+        if ok: 
+            cache[work_items[i][4]] = work_items[i][5]
+        else: 
+            logger.warning(f"Failed item: {Path(work_items[i][4]).name} - {err}")
         
     with open(CONF.cache_path, 'wb') as f: pickle.dump(cache, f)
     logger.info("Done.")
