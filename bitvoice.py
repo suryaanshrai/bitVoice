@@ -155,32 +155,63 @@ def download_file(url: str, dest_path: str) -> None:
 
 # --- Engines ---
 class TTSEngine:
-    def get_voices(self) -> List[str]: raise NotImplementedError
+    def get_voices(self) -> List[Tuple[str, str]]: raise NotImplementedError
     def generate(self, text: str, voice: str, output_path: str) -> None: raise NotImplementedError
 
 class KokoroEngine(TTSEngine):
     def __init__(self):
-        # Auto-download model if missing
-        if not os.path.exists(CONF.kokoro_model_path):
-             os.makedirs(os.path.dirname(CONF.kokoro_model_path), exist_ok=True)
-             logger.info("Kokoro model not found. Downloading...")
-             download_file("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx", CONF.kokoro_model_path)
+        # Check baked-in path first (Docker defaults)
+        baked_model = "/app/models/kokoro-v1.0.onnx"
+        baked_voices = "/app/models/voices-v1.0.bin"
+        
+        self.model_path = CONF.kokoro_model_path
+        self.voices_path = CONF.kokoro_voices_path
 
-        if not os.path.exists(CONF.kokoro_voices_path):
-             os.makedirs(os.path.dirname(CONF.kokoro_voices_path), exist_ok=True)
-             logger.info("Kokoro voices not found. Downloading...")
-             download_file("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin", CONF.kokoro_voices_path)
+        if os.path.exists(baked_model) and os.path.exists(baked_voices):
+            logger.info(f"Using baked-in Kokoro model at {baked_model}")
+            self.model_path = baked_model
+            self.voices_path = baked_voices
+        else:
+             # Auto-download model if missing locally
+             if not os.path.exists(self.model_path):
+                  os.makedirs(os.path.dirname(self.model_path), exist_ok=True)
+                  logger.info("Kokoro model not found. Downloading...")
+                  download_file("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx", self.model_path)
+
+             if not os.path.exists(self.voices_path):
+                  os.makedirs(os.path.dirname(self.voices_path), exist_ok=True)
+                  logger.info("Kokoro voices not found. Downloading...")
+                  download_file("https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin", self.voices_path)
 
         try:
             from kokoro_onnx import Kokoro
-            if os.path.exists(CONF.kokoro_model_path):
-                self.kokoro = Kokoro(CONF.kokoro_model_path, CONF.kokoro_voices_path)
+            if os.path.exists(self.model_path):
+                self.kokoro = Kokoro(self.model_path, self.voices_path)
             else:
-                 raise FileNotFoundError(f"Kokoro model not found at {CONF.kokoro_model_path}")
+                 raise FileNotFoundError(f"Kokoro model not found at {self.model_path}")
         except ImportError:
             raise ImportError("kokoro-onnx not installed.")
     
-    def get_voices(self) -> List[str]: return self.kokoro.get_voices()
+    def get_voices(self) -> List[Tuple[str, str]]:
+        # Hardcoded descriptions for standard Kokoro voices if available
+        descriptions = {
+            "af_heart": "American Female - Heart", "af_alloy": "American Female - Alloy",
+            "af_aoede": "American Female - Aoede", "af_bella": "American Female - Bella",
+            "af_jessica": "American Female - Jessica", "af_kore": "American Female - Kore",
+            "af_murphy": "American Female - Murphy", "af_nicole": "American Female - Nicole",
+            "af_river": "American Female - River", "af_sarah": "American Female - Sarah",
+            "af_sky": "American Female - Sky", "am_adam": "American Male - Adam",
+            "am_echo": "American Male - Echo", "am_eric": "American Male - Eric",
+            "am_fenrir": "American Male - Fenrir", "am_liam": "American Male - Liam",
+            "am_michael": "American Male - Michael", "am_onyx": "American Male - Onyx",
+            "am_puck": "American Male - Puck", "bf_alice": "British Female - Alice",
+            "bf_emma": "British Female - Emma", "bf_isabella": "British Female - Isabella",
+            "bf_lily": "British Female - Lily", "bm_daniel": "British Male - Daniel",
+            "bm_fable": "British Male - Fable", "bm_george": "British Male - George",
+            "bm_lewis": "British Male - Lewis"
+        }
+        raw_voices = self.kokoro.get_voices()
+        return [(v, descriptions.get(v, "Kokoro Voice")) for v in raw_voices]
     def generate(self, text: str, voice: str, output_path: str) -> None:
         samples, sample_rate = self.kokoro.create(text, voice=voice, speed=1.0, lang="en-us")
         sf.write(output_path, samples, sample_rate)
@@ -189,7 +220,8 @@ class Pyttsx3Engine(TTSEngine):
     def __init__(self):
         import pyttsx3
         self.engine = pyttsx3.init()
-    def get_voices(self) -> List[str]: return [v.name for v in self.engine.getProperty('voices')]
+    def get_voices(self) -> List[Tuple[str, str]]:
+        return [(v.name, v.id) for v in self.engine.getProperty('voices')]
     def generate(self, text: str, voice: str, output_path: str) -> None:
         voices = self.engine.getProperty('voices')
         selected_voice = None
@@ -218,7 +250,7 @@ class PiperEngine(TTSEngine):
             from piper import PiperVoice
             self.voice = PiperVoice.load(CONF.piper_model_path, config_path=CONF.piper_config_path)
         except ImportError: raise ImportError("piper-tts not installed.")
-    def get_voices(self) -> List[str]: return ["default"]
+    def get_voices(self) -> List[Tuple[str, str]]: return [("default", "Default Piper Voice")]
     def generate(self, text: str, voice: str, output_path: str) -> None:
         with open(output_path, "wb") as wav_file:
             self.voice.synthesize(text, wav_file)
@@ -227,7 +259,8 @@ class GTTSEngine(TTSEngine):
     def __init__(self):
         from gtts import gTTS
         self.gTTS = gTTS
-    def get_voices(self) -> List[str]: return ["en", "fr", "es"]
+    def get_voices(self) -> List[Tuple[str, str]]:
+        return [("en", "English"), ("fr", "French"), ("es", "Spanish")]
     def generate(self, text: str, voice: str, output_path: str) -> None:
         tts = self.gTTS(text=text, lang=voice if voice in self.get_voices() else "en")
         tts.save(output_path)
@@ -238,7 +271,7 @@ class F5TTSEngine(TTSEngine):
         from importlib.resources import files
         self.files = files
         self.f5tts = F5TTS()
-    def get_voices(self) -> List[str]: return ["default"]
+    def get_voices(self) -> List[Tuple[str, str]]: return [("default", "Reference Audio (F5-TTS)")]
     def generate(self, text: str, voice: str, output_path: str) -> None:
         ref_file = voice
         if voice == "default" or not os.path.exists(voice):
@@ -249,15 +282,68 @@ class XTTSEngine(TTSEngine):
     def __init__(self):
         from TTS.api import TTS
         self.tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=False)
-    def get_voices(self) -> List[str]: return ["default"]
+    def get_voices(self) -> List[Tuple[str, str]]: return [("default", "Default Speaker")]
     def generate(self, text: str, voice: str, output_path: str) -> None:
         speaker_wav = voice if os.path.exists(voice) else None
         if not speaker_wav: self.tts.tts_to_file(text=text, file_path=output_path, speaker=self.tts.speakers[0], language="en")
         else: self.tts.tts_to_file(text=text, file_path=output_path, speaker_wav=speaker_wav, language="en")
 
 class FishSpeechEngine(TTSEngine):
-    def get_voices(self) -> List[str]: return []
+    def get_voices(self) -> List[Tuple[str, str]]: return []
     def generate(self, text: str, voice: str, output_path: str) -> None: raise NotImplementedError("Fish Speech not manually configured.")
+
+class MeloTTSEngine(TTSEngine):
+    def __init__(self):
+        try:
+            from melo.api import TTS
+        except ImportError:
+            raise ImportError("MeloTTS not installed. Please install 'git+https://github.com/myshell-ai/MeloTTS.git'")
+        # Initialize with English by default
+        self.model = TTS(language='EN', device='auto')
+        
+    def get_voices(self) -> List[Tuple[str, str]]:
+        if hasattr(self.model, 'hps') and hasattr(self.model.hps.data, 'spk2id'):
+             return [(k, f"MeloTTS {k}") for k in self.model.hps.data.spk2id.keys()]
+        return [("EN-US", "MeloTTS EN-US (Default)")]
+
+    def generate(self, text: str, voice: str, output_path: str) -> None:
+        speaker_id = 0
+        if hasattr(self.model, 'hps') and hasattr(self.model.hps.data, 'spk2id'):
+             speaker_id = self.model.hps.data.spk2id.get(voice, self.model.hps.data.spk2id.get('EN-US', 0))
+        self.model.tts_to_file(text, speaker_id, output_path, speed=1.0)
+
+class ChatterboxEngine(TTSEngine):
+    def __init__(self):
+        try:
+            from chatterbox import Chatterbox
+        except ImportError:
+            raise ImportError("Chatterbox not installed.")
+        self.cb = Chatterbox()
+
+    def get_voices(self) -> List[Tuple[str, str]]:
+        return [("default", "Chatterbox Default")]
+
+    def generate(self, text: str, voice: str, output_path: str) -> None:
+        # Check if voice is a file path (Voice Cloning)
+        if voice and os.path.exists(voice) and os.path.isfile(voice):
+            logger.info(f"Chatterbox: Cloning voice from {voice}")
+            # chatterbox usually takes speaker_wav argument for cloning
+            self.cb.tts(text, output_path, speaker_wav=voice)
+        else:
+            # Default synthesis
+            self.cb.tts(text, output_path)
+
+
+MODEL_INFO = {
+    "kokoro": {"desc": "High-quality, lightweight neural TTS (~150MB)."},
+    "piper": {"desc": "Fast, local neural TTS (Requires download)."},
+    "pyttsx3": {"desc": "Offline, system-native TTS (No download)."},
+    "gtts": {"desc": "Google Translate TTS (Online only)."},
+    "f5-tts": {"desc": "F5-TTS model (Heavy, requires GPU/strong CPU)."},
+    "xtts": {"desc": "XTTS v2 (Heavy, high quality)."},
+    "melo": {"desc": "MeloTTS (High quality, multilingual)."},
+    "chatterbox": {"desc": "Chatterbox TTS (Voice cloning capabilities)."}
+}
 
 def get_engine(model_name: str) -> TTSEngine:
     if model_name == "kokoro": return KokoroEngine()
@@ -266,6 +352,9 @@ def get_engine(model_name: str) -> TTSEngine:
     elif model_name == "gtts": return GTTSEngine()
     elif model_name == "f5-tts": return F5TTSEngine()
     elif model_name == "xtts": return XTTSEngine()
+    elif model_name == "melo": return MeloTTSEngine()
+    elif model_name == "chatterbox": return ChatterboxEngine()
+    elif model_name in MODEL_INFO: raise ValueError(f"Model {model_name} defined but not implemented.")
     else: raise ValueError(f"Unknown model: {model_name}")
 
 # --- Worker for Parallel ---
@@ -298,7 +387,8 @@ class BitVoice:
             if not self.voice:
                 try:
                     voices = self.engine.get_voices()
-                    self.voice = "af_heart" if self.model == "kokoro" else (voices[0] if voices else "default")
+                    # voices is now List[Tuple[str, str]]
+                    self.voice = "af_heart" if self.model == "kokoro" else (voices[0][0] if voices else "default")
                 except Exception as e:
                     logger.debug(f"Could not autoset voice: {e}")
                     self.voice = "default"
@@ -315,127 +405,9 @@ class BitVoice:
         cleaned = clean_markdown(text)
         self.convert_text(cleaned, output_path)
 
-# --- Installation Logic ---
-def install_tool() -> None:
-    """Install CLI wrapper and add to PATH."""
-    script_path = os.path.abspath(__file__)
-    script_dir = os.path.dirname(script_path)
-    
-    if os.name == 'nt':
-        wrapper_path = os.path.join(script_dir, "bitvoice.bat")
-        with open(wrapper_path, "w") as f:
-            f.write(f'@echo off\n"{sys.executable}" "{script_path}" %*')
-        print(f"[SUCCESS] Created wrapper: {wrapper_path}")
-        
-        # Add to PATH via Registry
-        try:
-            import winreg
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Environment', 0, winreg.KEY_ALL_ACCESS)
-            try:
-                current_path, _ = winreg.QueryValueEx(key, 'Path')
-            except FileNotFoundError:
-                current_path = ""
-            
-            if script_dir.lower() not in current_path.lower().split(';'):
-                new_path = f"{current_path};{script_dir}" if current_path else script_dir
-                winreg.SetValueEx(key, 'Path', 0, winreg.REG_EXPAND_SZ, new_path)
-                print(f"[SUCCESS] Added {script_dir} to User PATH.")
-                print("Note: You may need to restart your terminal for changes to take effect.")
-            else:
-                 print(f"[INFO] {script_dir} is already in PATH.")
-            winreg.CloseKey(key)
-        except Exception as e:
-            print(f"[ERROR] Could not update PATH registry: {e}")
-            print(f"Please manually add {script_dir} to your environment variables.")
 
-    else:
-        wrapper_path = os.path.join(script_dir, "bitvoice")
-        with open(wrapper_path, "w") as f:
-            f.write(f'#!/bin/bash\nexec "{sys.executable}" "{script_path}" "$@"')
-        os.chmod(wrapper_path, 0o755)
-        print(f"[SUCCESS] Created wrapper: {wrapper_path}")
-        
-        # Add to PATH on Linux/Mac
-        shell = os.environ.get("SHELL", "")
-        home = os.path.expanduser("~")
-        config_file = None
-        
-        if "zsh" in shell:
-            config_file = os.path.join(home, ".zshrc")
-        elif "bash" in shell:
-            # On Linux, .bashrc is common. On Mac, .bash_profile might be used.
-            if os.path.exists(os.path.join(home, ".bash_profile")):
-                config_file = os.path.join(home, ".bash_profile")
-            else:
-                config_file = os.path.join(home, ".bashrc")
-        else:
-            # Fallback or other shells (profile)
-            config_file = os.path.join(home, ".profile")
 
-        export_line = f'export PATH="$PATH:{script_dir}"'
-        
-        if config_file:
-            try:
-                # Check if already exists
-                content = ""
-                if os.path.exists(config_file):
-                    with open(config_file, "r") as f:
-                        content = f.read()
-                
-                if script_dir not in content:
-                    with open(config_file, "a") as f:
-                        f.write(f"\n# Added by BitVoice\n{export_line}\n")
-                    print(f"[SUCCESS] Added to PATH in {config_file}")
-                    print(f"Run 'source {config_file}' or restart your terminal.")
-                else:
-                    print(f"[INFO] Already in PATH in {config_file}")
-            except Exception as e:
-                print(f"[ERROR] Could not update {config_file}: {e}")
-                print(f"Please manually run: {export_line}")
-        else:
-             print(f"Could not detect shell config file. Please manually run: {export_line}")
 
-def install_library_package() -> None:
-    """Install the current directory as a pip package."""
-    # Check venv
-    in_venv = (sys.prefix != sys.base_prefix)
-    if not in_venv:
-        # We use print here as it is an interactive prompt
-        print("Warning: You are NOT running in a virtual environment.")
-        confirm = input("Do you want to install 'bitvoice' into your global python environment? [y/N]: ")
-        if confirm.lower() != 'y':
-            print("Aborted.")
-            return
-
-    print("Installing bitvoice as a library (editable mode)...")
-    
-    install_f5 = False
-    f5_confirm = input("Do you want to install optional F5-TTS support (Heavy, ~3GB)? [y/N]: ")
-    if f5_confirm.lower() == 'y': install_f5 = True
-
-    import subprocess
-    try:
-        cmd = [sys.executable, "-m", "pip", "install", "-e"]
-        if install_f5:
-             cmd.append(".[f5]")
-        else:
-             cmd.append(".")
-             
-        subprocess.check_call(cmd)
-        print("\nSuccess! You can now use 'bitvoice' as a command or 'import bitvoice' in Python.")
-    except subprocess.CalledProcessError as e:
-        print(f"Installation failed: {e}")
-
-def install_f5_tts_deps() -> None:
-    """Install heavy dependencies for F5-TTS using library extras."""
-    print("Installing F5-TTS dependencies via extras...")
-    import subprocess
-    try:
-        # We try to install via pip install .[f5]
-        subprocess.check_call([sys.executable, "-m", "pip", "install", ".[f5]"])
-        print("\n[SUCCESS] F5-TTS dependencies installed.")
-    except subprocess.CalledProcessError as e:
-        print(f"Installation failed: {e}")
 
 # --- Main CLI ---
 def main() -> None:
@@ -445,12 +417,32 @@ def main() -> None:
     parser.add_argument("--model", "-m", type=str, default="kokoro", help="TTS Model (kokoro, piper, etc).")
     parser.add_argument("--voice", "-v", type=str, help="Voice name.")
     parser.add_argument("--parallel", "-p", action="store_true", help="Enable parallel processing.")
-    parser.add_argument("--install", action="store_true", help="Install CLI wrapper script (Legacy).")
-    parser.add_argument("--install-library", action="store_true", help="Install as a Python library.")
-    parser.add_argument("--install-f5-tts", action="store_true", help="Install F5-TTS dependencies (Heavy).")
+
+
+    parser.add_argument("--model-list", action="store_true", help="List supported TTS models.")
+    parser.add_argument("--voice-list", type=str, help="List voices for a specific model.")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging.")
     
     args = parser.parse_args()
+
+    if args.model_list:
+        print("Supported Models:")
+        for model in MODEL_INFO:
+            print(f" - {model}: {MODEL_INFO[model]['desc']}")
+        return
+
+    if args.voice_list:
+        model_name = args.voice_list
+        print(f"Listing voices for {model_name}...")
+        try:
+            engine = get_engine(model_name)
+            voices = engine.get_voices()
+            print(f"Found {len(voices)} voices:")
+            for v_id, v_desc in voices:
+                print(f" - {v_id}: {v_desc}")
+        except Exception as e:
+            print(f"Error listing voices: {e}")
+        return
 
     # Configure Logging
     logging.basicConfig(
@@ -459,17 +451,9 @@ def main() -> None:
         datefmt='%H:%M:%S'
     )
 
-    if args.install_f5_tts:
-        install_f5_tts_deps()
-        return
 
-    if args.install_library:
-        install_library_package()
-        return
 
-    if args.install:
-        install_tool()
-        return
+
         
     if not args.input:
         parser.print_help()
@@ -503,7 +487,8 @@ def main() -> None:
         dummy = get_engine(args.model) # Validate model
         # Get voices (try/except for robustness)
         try: 
-            available_voices = dummy.get_voices()
+            available_voices_info = dummy.get_voices()
+            available_voices = [v[0] for v in available_voices_info]
         except Exception as e: 
             logger.debug(f"Could not get voices: {e}")
             available_voices = ["default"]

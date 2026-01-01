@@ -17,7 +17,10 @@ setup(
         "python-docx",
         "EbookLib",
         "beautifulsoup4",
-        "numpy"
+        "numpy",
+        "f5-tts",
+        "torch",
+        "torchaudio"
     ],
     entry_points={
         "console_scripts": [
@@ -28,8 +31,5 @@ setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
-    extras_require={
-        "f5": ["f5-tts", "torch", "torchaudio"],
-    },
     python_requires='>=3.8',
 )
