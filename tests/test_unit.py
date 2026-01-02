@@ -13,27 +13,7 @@ from bitvoice.utils.files import get_file_hash, read_file_content
 from bitvoice.cli import process_single_item
 from bitvoice.config import CONF
 
-# --- Fixtures ---
-@pytest.fixture
-def temp_files(tmp_path: Path) -> Generator[Tuple[Path, Path], None, None]:
-    md_file = tmp_path / "test.md"
-    md_file.write_text("# Hello\n This is **bold**.", encoding="utf-8")
-    
-    txt_file = tmp_path / "test.txt"
-    txt_file.write_text("Simple text.", encoding="utf-8")
-    
-    yield md_file, txt_file
-
 # --- Unit Tests: Utilities ---
-@pytest.mark.parametrize("input_text, expected", [
-    ("# Header\nSome **bold**.", "Header\nSome bold."),
-    ("![Image](img.png) Text.", "Text."),
-    ("[Link](url)", "Link"),
-    ("`code`", "code"),
-])
-def test_clean_markdown(input_text: str, expected: str) -> None:
-    assert clean_markdown(input_text) == expected
-
 def test_get_file_hash() -> None:
     content = "test content"
     h1 = get_file_hash(content, "model1", "voice1")

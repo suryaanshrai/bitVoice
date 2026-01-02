@@ -55,3 +55,26 @@ def test_main_cli_e2e(mock_get_eng: MagicMock, mock_validate: MagicMock, temp_fi
              
     mock_get_eng.assert_called_with("piper")
     mock_eng.generate.assert_called()
+
+def test_main_model_list() -> None:
+    # Test --model-list flag
+    with patch("sys.argv", ["bitvoice", "--model-list"]), \
+         patch("bitvoice.cli.MODEL_INFO", {"test_model": {"desc": "Test Description"}}), \
+         patch("builtins.print") as mock_print:
+        main()
+        # Verify it printed the model info
+        mock_print.assert_any_call(" - test_model: Test Description")
+
+@patch("bitvoice.cli.get_engine")
+def test_main_voice_list(mock_get_eng: MagicMock) -> None:
+    # Test --voice-list flag
+    mock_eng = MagicMock()
+    mock_get_eng.return_value = mock_eng
+    mock_eng.get_voices.return_value = [("voice1", "Voice 1 Info")]
+    
+    with patch("sys.argv", ["bitvoice", "--voice-list", "test_model"]), \
+         patch("builtins.print") as mock_print:
+        main()
+        
+    mock_get_eng.assert_called_with("test_model")
+    mock_print.assert_any_call(" - voice1: Voice 1 Info")
