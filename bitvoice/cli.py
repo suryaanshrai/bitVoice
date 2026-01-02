@@ -24,8 +24,8 @@ def init_worker(model_name: str):
     except Exception as e:
         logger.error(f"Worker init failed: {e}")
 
-def process_single_item(item_data: Tuple[str, str, str, str]) -> Tuple[bool, Optional[str]]:
-    text, model_name, voice_name, output_path = item_data
+def process_single_item(item_data: Tuple[str, str, str, str, str, str, Dict[str, Any]]) -> Tuple[bool, Optional[str]]:
+    text, model_name, voice_name, output_path, src_path, hash_val, config = item_data
     
     # If running in parallel, use the global worker engine.
     # If running sequentially (and this function is called directly), init local engine if needed.
@@ -43,7 +43,7 @@ def process_single_item(item_data: Tuple[str, str, str, str]) -> Tuple[bool, Opt
             return False, f"Engine init failed: {e}"
 
     try:
-        engine.generate(text, voice_name, output_path)
+        engine.generate(text, voice_name, output_path, **config)
         return True, None
     except Exception as e:
         logger.error(f"Error processing item: {e}")
@@ -71,6 +71,11 @@ def main() -> None:
     parser.add_argument("--model-list", action="store_true", help="List supported TTS models.")
     parser.add_argument("--voice-list", type=str, help="List voices for a specific model.")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging.")
+
+    # Chatterbox Config
+    parser.add_argument("--cb-speed", type=float, help="Chatterbox: Speaking rate/flow (0.0-1.0).", default=None)
+    parser.add_argument("--cb-temp", type=float, help="Chatterbox: Temperature (0.0-1.0).", default=None)
+    parser.add_argument("--cb-exag", type=float, help="Chatterbox: Exaggeration (0.0-1.0).", default=None)
     
     args = parser.parse_args()
 
@@ -209,7 +214,11 @@ def main() -> None:
                  logger.info(f"Skipping cached: {file_path.name}")
                  continue
                  
-             work_items.append((cleaned, args.model, str(voice), str(audio_file), str(file_path), f_hash))
+             work_items.append((cleaned, args.model, str(voice), str(audio_file), str(file_path), f_hash, {
+                 "speed": args.cb_speed,
+                 "temperature": args.cb_temp,
+                 "exaggeration": args.cb_exag
+             }))
         except Exception as e:
              logger.error(f"Skipping {file_path}: {e}")
 
@@ -225,7 +234,7 @@ def main() -> None:
          from concurrent.futures import ProcessPoolExecutor, as_completed
          # Use init_worker to load model once per process
          with ProcessPoolExecutor(initializer=init_worker, initargs=(args.model,)) as executor:
-             futures = {executor.submit(process_single_item, (w[0], w[1], w[2], w[3])): i for i, w in enumerate(work_items)}
+             futures = {executor.submit(process_single_item, w): i for i, w in enumerate(work_items)}
              for future in as_completed(futures):
                  i = futures[future]
                  file_name = Path(work_items[i][4]).name
@@ -246,7 +255,7 @@ def main() -> None:
              logger.info(f"[{i+1}/{len(work_items)}] Processing: {file_name}")
              # We can manually call generate on the engine instance to reuse it
              try:
-                 main_engine.generate(w[0], w[2], w[3])
+                 main_engine.generate(w[0], w[2], w[3], **w[6])
                  results[i] = (True, None)
                  logger.info(f"    -> Generated: {Path(w[3]).name}")
              except Exception as e:

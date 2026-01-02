@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
+FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-devel
 
 # Install system dependencies
 # git for installing python packages from git
@@ -6,7 +6,12 @@ FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
 # ffmpeg for audio processing
 # cmake/build-essential for compiling some python extensions
 # libsndfile1 for soundfile
-RUN apt-get update && apt-get install -y \
+ENV TZ=Asia/Kolkata \
+    DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y tzdata && \
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
+    apt-get install -y \
     git \
     espeak-ng \
     ffmpeg \
@@ -28,10 +33,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 # Install Python dependencies
 COPY requirements.txt .
 RUN uv pip install --system --no-cache "numpy<2" setuptools wheel "Cython<3"
-# Install spacy-pkuseg (Python 3.11 compatible fork) instead of broken pkuseg
-RUN uv pip install --system --no-cache spacy-pkuseg
-RUN uv pip install --system --no-cache --no-build-isolation --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.txt
-# Install Chatterbox without dependencies (since we used spacy-pkuseg instead of pkuseg)
+# Install spacy-pkuseg (Python 3.11 compatible fork) - keeping it just in case, but strict deps might override? 
+# Actually on Py3.10 normal pkuseg works. But let's stick to requirements.txt for simplicity.
+RUN uv pip install --system --no-cache --no-build-isolation --extra-index-url https://download.pytorch.org/whl/cu118 -r requirements.txt
 
 
 # Bake in Piper Model (en_US-lessac-medium)

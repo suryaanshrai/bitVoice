@@ -48,7 +48,7 @@ class PiperEngine(TTSEngine):
              voices.append((self.default_voice_name, "Default Piper Voice"))
         return voices
 
-    def generate(self, text: str, voice: str, output_path: str) -> None:
+    def generate(self, text: str, voice: str, output_path: str, **kwargs) -> None:
         from piper import PiperVoice
         
         voice_name = voice if voice and voice != "default" else self.default_voice_name

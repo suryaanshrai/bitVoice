@@ -8,6 +8,6 @@ class TTSEngine(ABC):
         pass
 
     @abstractmethod
-    def generate(self, text: str, voice: str, output_path: str) -> None:
+    def generate(self, text: str, voice: str, output_path: str, **kwargs) -> None:
         """Generate audio from text."""
         pass

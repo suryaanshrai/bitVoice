@@ -123,7 +123,7 @@ def test_process_single_item_success(mock_get_eng: MagicMock) -> None:
     mock_eng = MagicMock()
     mock_get_eng.return_value = mock_eng
     
-    item = ("text", "piper", "voice", "out.wav")
+    item = ("text", "piper", "voice", "out.wav", "src.txt", "hash", {})
     
     # Patch the global worker engine in cli to be None so it tries to load
     # Or set it to our mock
@@ -132,6 +132,7 @@ def test_process_single_item_success(mock_get_eng: MagicMock) -> None:
     
     assert success is True
     assert err is None
+    # Verify kwargs were passed if any, or just generate call
     mock_eng.generate.assert_called_with("text", "voice", "out.wav")
 
 @patch("bitvoice.cli.get_engine")
@@ -139,7 +140,7 @@ def test_process_single_item_failure(mock_get_eng: MagicMock) -> None:
     # Scenario: _worker_engine is None, and get_engine fails
     mock_get_eng.side_effect = Exception("Engine Load Failed")
     
-    item = ("text", "piper", "voice", "out.wav")
+    item = ("text", "piper", "voice", "out.wav", "src.txt", "hash", {})
     with patch("bitvoice.cli._worker_engine", None):
         success, err = process_single_item(item)
     

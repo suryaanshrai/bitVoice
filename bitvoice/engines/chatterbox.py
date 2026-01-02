@@ -28,14 +28,26 @@ class ChatterboxEngine(TTSEngine):
     def get_voices(self) -> List[Tuple[str, str]]:
         return [("default", "Chatterbox Default"), ("cloned", "Cloned Voice (provide path)")]
 
-    def generate(self, text: str, voice: str, output_path: str) -> None:
+    def generate(self, text: str, voice: str, output_path: str, **kwargs) -> None:
+        # Config
+        speed = kwargs.get("speed")
+        temp = kwargs.get("temperature")
+        exag = kwargs.get("exaggeration")
+        
+        logger.debug(f"Chatterbox Config: Speed={speed}, Temp={temp}, Exag={exag}")
+
+        gen_kwargs = {}
+        if speed is not None: gen_kwargs["speed"] = speed
+        if temp is not None: gen_kwargs["temperature"] = temp
+        if exag is not None: gen_kwargs["exaggeration"] = exag
+
         # Check if voice is a file path (Voice Cloning)
         if voice and os.path.exists(voice) and os.path.isfile(voice):
             logger.info(f"Chatterbox: Cloning voice from {voice}")
-            wav = self.model.generate(text, audio_prompt_path=voice)
+            wav = self.model.generate(text, audio_prompt_path=voice, **gen_kwargs)
         else:
             # Default synthesis
-            wav = self.model.generate(text)
+            wav = self.model.generate(text, **gen_kwargs)
             
         torchaudio.save(output_path, wav, self.model.sr)
 
