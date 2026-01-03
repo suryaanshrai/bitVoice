@@ -1,55 +1,71 @@
-FROM pytorch/pytorch:2.1.0-cuda11.8-cudnn8-devel
+# Use PyTorch runtime image which has torch pre-installed (saving ~2GB download)
+FROM python:3.11
+
+# Set environment variables
+ENV TZ=Asia/Kolkata
+# DEBIAN_FRONTEND=noninteractive \
+# # Prevent Python from writing pyc files to disc (equivalent to python -B)
+# PYTHONDONTWRITEBYTECODE=1 \
+# # Helper to ensure output is not buffered
+# PYTHONUNBUFFERED=1 \
+# # Hugging Face cache location
+ENV HF_HOME=/app/models/huggingface
+# Ensure bitvoice module is found even when WORKDIR is changed
+ENV PYTHONPATH=/app
 
 # Install system dependencies
-# git for installing python packages from git
-# espeak-ng for MeloTTS/Piper
-# ffmpeg for audio processing
-# cmake/build-essential for compiling some python extensions
-# libsndfile1 for soundfile
-ENV TZ=Asia/Kolkata \
-    DEBIAN_FRONTEND=noninteractive
+# ffmpeg, espeak-ng, libsndfile1: Required for audio processing and TTS
+# python3: Required as base image is bare
 
-RUN apt-get update && apt-get install -y tzdata && \
-    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
-    apt-get install -y \
-    git \
-    espeak-ng \
-    ffmpeg \
-    cmake \
-    build-essential \
-    curl \
-    wget \
-    libsndfile1 \
-    && rm -rf /var/lib/apt/lists/*
+# RUN apt-get update && apt-get install -y --no-install-recommends \
+#     python3 \
+#     tzdata \
+#     espeak-ng \
+#     ffmpeg \
+#     libsndfile1 \
+#     build-essential \
+#     wget \
+#     python3-dev \
+#     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
+#     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Set HF_HOME early so it persists for both build and runtime
-ENV HF_HOME=/app/models/huggingface
-
-# Install uv
+# Install uv for fast python package management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-# Install Python dependencies
+# Copy requirements
 COPY requirements.txt .
-RUN uv pip install --system --no-cache "numpy<2" setuptools wheel "Cython<3"
-# Install spacy-pkuseg (Python 3.11 compatible fork) - keeping it just in case, but strict deps might override? 
-# Actually on Py3.10 normal pkuseg works. But let's stick to requirements.txt for simplicity.
-RUN uv pip install --system --no-cache --no-build-isolation --extra-index-url https://download.pytorch.org/whl/cu118 -r requirements.txt
 
+# Install Python dependencies
+# Torch/Audio are already in the base image, so we just install the rest.
+# Pre-install numpy (required for pkuseg build) and Cython (to regenerate C++ files for Py3.10)
+# RUN uv pip install --system --no-cache "numpy<2" "Cython<3"
 
-# Bake in Piper Model (en_US-lessac-medium)
-RUN mkdir -p /app/models/piper && \
-    wget -q -O /app/models/piper/en_US-lessac-medium.onnx "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx" && \
-    wget -q -O /app/models/piper/en_US-lessac-medium.onnx.json "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+# Manually download pkuseg, delete incompatible C++ files to force regeneration, and install
+# RUN wget https://files.pythonhosted.org/packages/source/p/pkuseg/pkuseg-0.0.25.tar.gz \
+#     && tar -xvf pkuseg-0.0.25.tar.gz \
+#     && rm pkuseg-0.0.25/pkuseg/inference.cpp \
+#     && rm pkuseg-0.0.25/pkuseg/feature_extractor.cpp \
+#     && rm pkuseg-0.0.25/pkuseg/postag/feature_extractor.cpp \
+#     && cd pkuseg-0.0.25 \
+#     && python3 setup.py install \
+#     && cd .. \
+#     && rm -rf pkuseg-0.0.25*
+
+RUN uv pip install --system --no-cache -r requirements.txt \
+    && rm -rf /root/.cache
 
 # Bake in Chatterbox Models
-# Triggers download to HF_HOME location defined above
+# This ensures models are present in the image and don't need runtime download.
+# We use device='cpu' here because the build environment might not have a GPU.
+# At runtime, the application will load these cached models onto the GPU if available.
 RUN python3 -c "from chatterbox.tts import ChatterboxTTS; from chatterbox.tts_turbo import ChatterboxTurboTTS; ChatterboxTTS.from_pretrained(device='cpu'); ChatterboxTurboTTS.from_pretrained(device='cpu')"
 
-# Copy application code
-COPY . .
+# Copy application code (ONLY necessary source files)
+COPY bitvoice/ bitvoice/
+COPY README.md LICENSE ./
 
-# Set entrypoint to run the module
+# Set entrypoint
 ENTRYPOINT ["python", "-m", "bitvoice"]
 CMD ["--help"]

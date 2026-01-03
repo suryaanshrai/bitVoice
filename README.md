@@ -1,18 +1,14 @@
 # BitVoice
 
-Convert documents (Markdown, PDF, EPUB, Word, Text) into natural-sounding speech using advanced local AI models.
+Convert Markdown documents into natural-sounding speech using advanced local AI models.
 
 **Now 100% Dockerized.** Run anywhere with zero dependency conflicts.
 
 ## Features
 - **Models**: 
-    - **Kokoro**: High-quality, lightweight (Baked-in).
-    - **Piper**: Fast, local, low-latency (Baked-in).
-    - **F5-TTS**: Zero-shot Voice Cloning.
-    - **MeloTTS**: Multilingual, high-quality.
-    - **Chatterbox**: Voice cloning specialized.
-    - **XTTS v2**: Heavy, high-fidelity.
-- **Formats**: `.md`, `.txt`, `.pdf`, `.docx`, `.epub`.
+    - **Chatterbox**: High-quality, fast, and supports voice cloning (Baked-in).
+    - **Chatterbox Turbo**: Optimized for speed (Baked-in).
+- **Formats**: `.md`.
 - **Input**: Process single files or entire directories recursively.
 - **Performance**: Parallel processing support (`--parallel`).
 - **Smart**: SHA256 caching keeps things fast.
@@ -50,8 +46,8 @@ If you prefer to build the image yourself:
 docker build -t suryaanshrai515/bitvoice:latest .
 ```
 
-# Convert a folder using Piper (Fast)
-bitvoice --model piper --input ./books --parallel
+# Convert a folder using Chatterbox
+bitvoice --model chatterbox --input ./books --parallel
 
 # List available models
 bitvoice --model-list
@@ -62,18 +58,14 @@ bitvoice --model-list
 ### Supported Models
 | Model | Description | Status |
 |-------|-------------|--------|
-| `kokoro` | High-quality, lightweight | **Baked-in** |
-| `piper` | Fast, works on CPU | **Baked-in** |
-| `f5-tts` | Voice Cloning (Requires GPU recomm.) | Download on demand |
-| `melo` | MeloTTS Multilingual | Experimental |
-| `chatterbox` | Chatterbox | Experimental |
-| `xtts` | XTTS v2 | Download on demand |
+| `chatterbox` | High-quality, supports voice cloning | **Baked-in** |
+| `chatterbox-turbo` | Optimized for speed | **Baked-in** |
 
 ### Command Line Arguments
 ```text
   --input, -i       Input directory or single file.
   --output, -o      Output directory or filename.
-  --model, -m       TTS Model (kokoro, piper, f5-tts, etc). Default: kokoro
+  --model, -m       TTS Model (chatterbox, chatterbox-turbo). Default: chatterbox
   --voice, -v       Voice name (or reference audio for cloning).
   --parallel, -p    Enable parallel processing.
   --model-list      List supported TTS models.
@@ -83,15 +75,10 @@ bitvoice --model-list
 
 ### Examples
 
-**Voice Cloning with F5-TTS**:
+**Using Chatterbox with Params**:
 ```bash
-bitvoice --model f5-tts --voice ./my_reference_audio.wav --input ./script.txt
+bitvoice --model chatterbox --input book.txt --cb-speed 1.2
 ```
-
-**Using a Specific Kokoro Voice**:
-```bash
-bitvoice --model kokoro --voice af_bella --input book.txt
-```ī
 
 ## Development
 

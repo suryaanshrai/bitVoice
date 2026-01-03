@@ -39,21 +39,21 @@ def test_bitvoice_convert_file(mock_get_eng: MagicMock, temp_files: Tuple[Path, 
     assert "Hello" in args[0][0]
 
 # --- CLI Integration ---
-@patch("bitvoice.cli.validate_in_cwd", side_effect=lambda x: Path(x))
+@patch("bitvoice.cli.validate_in_cwd", side_effect=lambda x: Path(x).absolute())     
 @patch("bitvoice.cli.get_engine")
 def test_main_cli_e2e(mock_get_eng: MagicMock, mock_validate: MagicMock, temp_files: Tuple[Path, Path]) -> None:
     md_file, _ = temp_files
     mock_eng = MagicMock()
     mock_get_eng.return_value = mock_eng
-    mock_eng.get_voices.return_value = [("piper_voice", "desc")]
+    mock_eng.get_voices.return_value = [("chatterbox_voice", "desc")]
     
     # We construct argv with the temp file path
-    with patch("sys.argv", ["bitvoice", "--input", str(md_file), "--model", "piper", "--output", str(md_file.parent / "out.wav")]):
+    with patch("sys.argv", ["bitvoice", "--input", str(md_file), "--model", "chatterbox", "--output", str(md_file.parent / "out.wav")]):
         # We need to preserve pickle/cache
         with patch("pickle.dump"), patch("pickle.load"): 
              main()
              
-    mock_get_eng.assert_called_with("piper")
+    mock_get_eng.assert_called_with("chatterbox")
     mock_eng.generate.assert_called()
 
 def test_main_model_list() -> None:

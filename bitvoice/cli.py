@@ -65,7 +65,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="BitVoice: Convert text/doc files to Speech.\nNOTE: Input and Output paths must be relative to the current directory.", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("--input", "-i", type=str, help="Input directory or single file (must be in current dir).")
     parser.add_argument("--output", "-o", type=str, help="Output directory or filename (must be in current dir).")
-    parser.add_argument("--model", "-m", type=str, default="piper", help="TTS Model (piper, chatterbox, chatterbox-turbo).")
+    parser.add_argument("--model", "-m", type=str, default="chatterbox", help="TTS Model (chatterbox, chatterbox-turbo).")
     parser.add_argument("--voice", "-v", type=str, help="Voice name.")
     parser.add_argument("--parallel", "-p", action="store_true", help="Enable parallel processing.")
     parser.add_argument("--model-list", action="store_true", help="List supported TTS models.")
@@ -143,7 +143,7 @@ def main() -> None:
         return
 
     # Gather files
-    supported_exts = {'.md', '.txt', '.pdf', '.docx', '.epub'}
+    supported_exts = {'.md'}
     files_to_process: List[Path] = []
     
     if is_single_file:
@@ -170,8 +170,7 @@ def main() -> None:
         
         voice = args.voice
         if not voice:
-             if args.model == "piper": voice = CONF.PIPER_VOICE_DEFAULT
-             else: voice = "default"
+             voice = "default"
         logger.info(f"Using Model: {args.model}, Voice: {voice}")
     except Exception as e:
         logger.error(f"Error initializing model {args.model}: {e}")

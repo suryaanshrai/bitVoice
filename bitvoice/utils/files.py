@@ -17,50 +17,8 @@ def _read_text_file(path: Path) -> Optional[str]:
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
 
-def _read_pdf_file(path: Path) -> Optional[str]:
-    try:
-        from pypdf import PdfReader
-        reader = PdfReader(path)
-        text = []
-        for page in reader.pages:
-            text.append(page.extract_text() or "")
-        return "\n".join(text)
-    except ImportError:
-        logger.error("pypdf not installed.")
-        return None
-
-def _read_docx_file(path: Path) -> Optional[str]:
-    try:
-        from docx import Document
-        doc = Document(path)
-        return "\n".join([p.text for p in doc.paragraphs])
-    except ImportError:
-        logger.error("python-docx not installed.")
-        return None
-
-def _read_epub_file(path: Path) -> Optional[str]:
-    try:
-        import ebooklib
-        from ebooklib import epub
-        from bs4 import BeautifulSoup
-        
-        book = epub.read_epub(str(path))
-        chapters = []
-        for item in book.get_items():
-            if item.get_type() == ebooklib.ITEM_DOCUMENT:
-                soup = BeautifulSoup(item.get_content(), 'html.parser')
-                chapters.append(soup.get_text())
-        return "\n".join(chapters)
-    except ImportError:
-        logger.error("EbookLib or beautifulsoup4 not installed.")
-        return None
-
 FILE_HANDLERS: Dict[str, Callable[[Path], Optional[str]]] = {
-    '.md': _read_text_file,
-    '.txt': _read_text_file,
-    '.pdf': _read_pdf_file,
-    '.docx': _read_docx_file,
-    '.epub': _read_epub_file
+    '.md': _read_text_file
 }
 
 def read_file_content(file_path: Path) -> Optional[str]:

@@ -16,7 +16,7 @@ class BitVoice:
       bv = BitVoice(model='kokoro', voice='af_heart')
       bv.convert_file('book.txt', 'audio.wav')
     """
-    def __init__(self, model: str = "piper", voice: Optional[str] = None):
+    def __init__(self, model: str = "chatterbox", voice: Optional[str] = None):
         self.model = model
         self.voice = voice
         self.engine: Optional[TTSEngine] = None
@@ -28,7 +28,7 @@ class BitVoice:
                 try:
                     voices = self.engine.get_voices()
                     # voices is now List[Tuple[str, str]]
-                    self.voice = "en_US-lessac-medium" if self.model == "piper" else (voices[0][0] if voices else "default")
+                    self.voice = voices[0][0] if voices else "default"
                 except Exception as e:
                     logger.debug(f"Could not autoset voice: {e}")
                     self.voice = "default"

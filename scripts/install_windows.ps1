@@ -43,7 +43,7 @@ if (!(Test-Path $installDir)) {
 # Create the batch file shim (works in CMD and PowerShell)
 $batPath = "$installDir\bitvoice.bat"
 $batContent = "@echo off
-docker run --gpus all --rm -v bitvoice_models:/app/models -v ""%cd%"":/workspace -w /workspace suryaanshrai515/bitvoice:latest %*
+docker run --gpus all --rm -e PYTHONPATH=/app -v ""%cd%"":/workspace -w /workspace suryaanshrai515/bitvoice:latest %*
 "
 Set-Content -Path $batPath -Value $batContent
 
@@ -73,6 +73,6 @@ function bitvoice {
     # Get current directory
     $localDir = Get-Location
     # Run docker with volume mount
-    docker run --gpus all --rm -v "${localDir}:/workspace" -w /workspace suryaanshrai515/bitvoice:latest @args
+    docker run --gpus all --rm -e PYTHONPATH=/app -v "${localDir}:/workspace" -w /workspace suryaanshrai515/bitvoice:latest @args
 }
 Write-Host "BitVoice is available in this session." -ForegroundColor Green

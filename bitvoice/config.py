@@ -13,12 +13,7 @@ class Settings:
     # 2. Else use ./models relative to CWD
     MODELS_DIR: str = "/app/models" if os.path.exists("/app/models") else "models"
     CACHE_FILENAME: str = "cache.pkl"
-    PIPER_VOICE_DEFAULT: str = "en_US-lessac-medium"
-    
-    @property
-    def piper_models_dir(self) -> str:
-        return os.path.join(self.MODELS_DIR, "piper")
-    
+
     @property
     def cache_path(self) -> str:
         return os.path.join(self.CACHE_DIR, self.CACHE_FILENAME)
