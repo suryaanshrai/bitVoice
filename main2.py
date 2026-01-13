@@ -8,8 +8,9 @@ import re
 from markdown import markdown
 from bs4 import BeautifulSoup
 import torch
-import os
+import os, json
 from pathlib import Path
+import hashlib
 
 
 MODEL = ChatterboxTTS.from_pretrained(device="cuda")
@@ -22,6 +23,8 @@ SETTINGS = {
     "cfg_weight": 0.3, # [0.02 - 1]
     # "temperature": 0.9, # [0.05 - 5]
 }
+
+HASH_JSON = "hashes.json"
 
 
 def split_text(text, title=None):
@@ -41,6 +44,13 @@ def split_text(text, title=None):
 
 
 def generate_audio(text, settings):
+    with open(HASH_JSON, "r") as f:
+        hash_dict = json.load(f)
+    content_hash = hashlib.sha256(" ".join(text).encode('utf-8')).hexdigest()
+    if content_hash in hash_dict:
+        print(f"\n\nSkipping audio file generation for {text[0]}\n\n")
+        return None
+
     audio_segments = []
 
     for para in text:
@@ -51,6 +61,9 @@ def generate_audio(text, settings):
     
     combined_wav = torch.cat(audio_segments, dim=-1)
     # ta.save(dest, combined_wav, MODEL.sr)
+    hash_dict[content_hash] = True
+    with open(HASH_JSON, "w") as f:
+        json.dump(hash_dict, f)
     return combined_wav
 
 def clean_md(md_content):
@@ -94,7 +107,10 @@ def parse_dir():
         chunks = split_text(cleaned_text, title=title)
         
         # Generate audio
-        combined_audio = generate_audio(text=chunks[:2], settings=SETTINGS)
+        combined_audio = generate_audio(text=chunks, settings=SETTINGS)
+        
+        if combined_audio is None:
+            continue
         
         # Create output path maintaining directory structure
         relative_path = md_file.relative_to(input_path)
