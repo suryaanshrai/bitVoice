@@ -11,13 +11,19 @@ import torch
 
 
 CHUNK_LENGTH = 200
-SETTINGS = {
-    "audio_prompt_path": "silent patient book review.wav",
-    "exaggeration": 0.8, # [0.25 - 2]
-    "cfg_weight": 0.2, # [0.02 - 1]
-    "temperature": 0.3, # [0.05 - 5]
-}
+# SETTINGS = {
+#     "audio_prompt_path": "mysample.wav",
+#     "exaggeration": 0.65, # [0.25 - 2]
+#     "cfg_weight": 0.05, # [0.02 - 1]
+#     "temperature": 0.9, # [0.05 - 5]
+# }
 
+SETTINGS = {
+    "audio_prompt_path": "mysample.wav",
+    "exaggeration": 0.72, # [0.25 - 2]
+    "cfg_weight": 0.02, # [0.02 - 1]
+    # "temperature": 0.4, # [0.05 - 5]
+}
 
 
 def split_text(text, title=None):
@@ -65,7 +71,7 @@ with open("Reading a bit.md", "r") as f:
     poem = clean_md(content)
 
 chunks = split_text(poem)
-generate_audio(text=chunks[:2], dest="reading_a_bit_surya.wav", settings=SETTINGS)
+generate_audio(text=chunks[:2], dest="reading_surya_3.wav", settings=SETTINGS)
 
 
 
