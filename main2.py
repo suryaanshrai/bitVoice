@@ -15,12 +15,12 @@ from pathlib import Path
 MODEL = ChatterboxTTS.from_pretrained(device="cuda")
 OUTPUT_DIR = "audios"
 INPUT_DIR = "content"
-CHUNK_LENGTH = 200
+CHUNK_LENGTH = 150
 SETTINGS = {
     "audio_prompt_path": "mysample.wav",
-    "exaggeration": 0.65, # [0.25 - 2]
-    "cfg_weight": 0.05, # [0.02 - 1]
-    "temperature": 0.9, # [0.05 - 5]
+    "exaggeration": 0.6, # [0.25 - 2]
+    "cfg_weight": 0.3, # [0.02 - 1]
+    # "temperature": 0.9, # [0.05 - 5]
 }
 
 
@@ -79,7 +79,7 @@ def parse_dir():
             continue
         
         frontmatter = frontmatter_match.group(1)
-        if not re.search(r'generate-audio\s*:\s*true', frontmatter, re.IGNORECASE):
+        if not re.search(r'generate-audio', frontmatter, re.IGNORECASE):
             continue
         
         print(f"Processing: {md_file}")
@@ -94,7 +94,7 @@ def parse_dir():
         chunks = split_text(cleaned_text, title=title)
         
         # Generate audio
-        combined_audio = generate_audio(text=chunks, settings=SETTINGS)
+        combined_audio = generate_audio(text=chunks[:2], settings=SETTINGS)
         
         # Create output path maintaining directory structure
         relative_path = md_file.relative_to(input_path)

@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 import torch
 
 
-CHUNK_LENGTH = 200
+CHUNK_LENGTH = 150
 # SETTINGS = {
 #     "audio_prompt_path": "mysample.wav",
 #     "exaggeration": 0.65, # [0.25 - 2]
@@ -20,7 +20,7 @@ CHUNK_LENGTH = 200
 
 SETTINGS = {
     "audio_prompt_path": "mysample.wav",
-    "exaggeration": 0.72, # [0.25 - 2]
+    "exaggeration": 0.6, # [0.25 - 2]
     "cfg_weight": 0.02, # [0.02 - 1]
     # "temperature": 0.4, # [0.05 - 5]
 }
@@ -66,12 +66,12 @@ def clean_md(md_content):
     return text
 
 
-with open("Reading a bit.md", "r") as f:
+with open("Minesweeper.md", "r") as f:
     content = f.read()
     poem = clean_md(content)
 
 chunks = split_text(poem)
-generate_audio(text=chunks[:2], dest="reading_surya_3.wav", settings=SETTINGS)
+generate_audio(text=chunks[:3], dest="minesweeper.wav", settings=SETTINGS)
 
 
 
