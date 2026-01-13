@@ -1,6 +1,6 @@
 .venv
 *.wav
 *.mp3
-chatterbox/
-audio/
-content/
+chatterbox/*
+audio/*
+content/*
