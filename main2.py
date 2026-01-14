@@ -142,8 +142,25 @@ def generate_audio(text, settings):
 
 def clean_md(md_content):
     md_content = re.sub(r'^---\s*\n.*?\n---\s*\n', '', md_content, flags=re.DOTALL)
-    html_content = markdown(md_content)
+    html_content = markdown(md_content, extensions=['tables', 'fenced_code'])
     soup = BeautifulSoup(html_content, 'html.parser')
+    
+    # Remove code blocks
+    for element in soup.find_all('pre'):
+        element.decompose()
+        
+    # Convert tables to text
+    for table in soup.find_all('table'):
+        rows_text = []
+        for row in table.find_all('tr'):
+            cells = row.find_all(['th', 'td'])
+            cell_text = [cell.get_text(strip=True) for cell in cells]
+            # Join non-empty cells with ", "
+            rows_text.append(", ".join(filter(None, cell_text)))
+            
+        # Join non-empty rows with ". " and replace table
+        table.replace_with(". ".join(filter(None, rows_text)))
+        
     text = soup.get_text()
     return text
 
