@@ -642,26 +642,15 @@ def parse_dir():
     for md_file in md_files:
         with open(md_file, "r", encoding="utf-8") as f:
             content = f.read()
-        
+
         # Check for generate-audio:true in frontmatter
         frontmatter_match = re.match(r'^---\s*\n(.*?)\n---\s*\n', content, flags=re.DOTALL)
         if not frontmatter_match:
             continue
-        
+
         frontmatter = frontmatter_match.group(1)
         if not re.search(r'generate-audio', frontmatter, re.IGNORECASE):
             continue
-        
-        print(f"Processing: {md_file}")
-        
-        # Clean the markdown content
-        cleaned_text = clean_md(content)
-        
-        # Get the title (filename without .md extension)
-        title = md_file.stem
-        
-        # Split the text into chunks
-        chunks = split_text(cleaned_text, title=title)
 
         # Create output path maintaining directory structure
         relative_path = md_file.relative_to(input_path)
@@ -673,6 +662,8 @@ def parse_dir():
         entry = file_db.get(rel_key) if isinstance(file_db, dict) else None
         mp3_exists = _is_nonempty_file(mp3_file)
         wav_exists = _is_nonempty_file(wav_file)
+
+        print(f"Processing: {md_file}")
 
         if HASHING and isinstance(entry, dict):
             if entry.get("source_hash") == source_hash and mp3_exists:
@@ -712,6 +703,49 @@ def parse_dir():
                     )
                 continue
 
+        # If a WAV already exists but MP3 doesn't, compress it instead of regenerating.
+        # This helps when older runs produced WAVs (or compression previously failed)
+        # and there is no cache entry yet.
+        if wav_exists and (not mp3_exists):
+            print(f"\n\nFound existing WAV for {rel_key}; compressing to MP3 instead of regenerating\n\n")
+            file_start_perf = time.perf_counter()
+            ok = compress_wav_to_mp3(wav_file, mp3_file)
+            if ok:
+                print(f"Saved MP3: {mp3_file}")
+                if DELETE_WAV_AFTER_COMPRESS:
+                    try:
+                        wav_file.unlink(missing_ok=True)
+                        print(f"Deleted WAV: {wav_file}")
+                    except OSError as e:
+                        print(f"Failed to delete WAV {wav_file}: {e}")
+
+                if HASHING and isinstance(file_db, dict):
+                    file_db[rel_key] = {
+                        "source_hash": source_hash,
+                        "tts_hash": None,
+                        "cleaning_version": CLEANING_VERSION,
+                        "chunk_length": CHUNK_LENGTH,
+                        "updated_at": datetime.now().isoformat(timespec="seconds"),
+                        "adopted": True,
+                        "adopted_from": "wav",
+                    }
+                    hash_db["files"] = file_db
+                    _save_hash_db(HASH_JSON, hash_db)
+
+                _log_file_timing(
+                    rel_key=rel_key,
+                    file_seconds=time.perf_counter() - file_start_perf,
+                    final_output=mp3_file,
+                )
+            else:
+                print(f"MP3 compression failed; keeping WAV: {wav_file}")
+                _log_file_timing(
+                    rel_key=rel_key,
+                    file_seconds=time.perf_counter() - file_start_perf,
+                    final_output=wav_file,
+                )
+            continue
+
         # If an MP3 already exists but we don't have a hash entry yet, adopt it.
         if HASHING and ADOPT_EXISTING_MP3_WITHOUT_HASH_ENTRY and mp3_exists and not isinstance(entry, dict):
             print(f"\n\nFound existing MP3 for {rel_key}; adopting into cache without regenerating\n\n")
@@ -726,6 +760,11 @@ def parse_dir():
             hash_db["files"] = file_db
             _save_hash_db(HASH_JSON, hash_db)
             continue
+
+        # Clean the markdown content (only after we know we need to do TTS)
+        cleaned_text = clean_md(content)
+        title = md_file.stem
+        chunks = split_text(cleaned_text, title=title)
         
         # Generate audio
         file_start_perf = time.perf_counter()
