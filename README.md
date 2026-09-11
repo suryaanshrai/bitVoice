@@ -21,7 +21,7 @@ A Python-based text-to-speech (TTS) system that converts markdown files to high-
 
 📁 **Organized Output**
 - Preserves directory structure from input to output
-- WAV format output with configurable sample rates
+- MP3 (compressed) output via ffmpeg (falls back to keeping WAV if compression fails)
 - Batch processing with cooldown periods
 
 ## Requirements
@@ -30,6 +30,22 @@ A Python-based text-to-speech (TTS) system that converts markdown files to high-
 - CUDA-compatible GPU
 - PyTorch with CUDA support
 - ChatterboxTTS
+
+### ffmpeg (for MP3 compression)
+
+To produce small `.mp3` outputs (and delete the intermediate `.wav`), install `ffmpeg` and make sure it is available on your `PATH`.
+
+Windows (recommended):
+
+```bash
+winget install Gyan.FFmpeg
+```
+
+Verify:
+
+```bash
+ffmpeg -version
+```
 
 ## Installation
 
@@ -152,7 +168,21 @@ time.sleep(180)  # Cooldown in seconds
 5. **Audio Generation**: Generates audio for each chunk with your voice
 6. **Silence Removal**: Trims long silences while preserving natural pauses
 7. **Hash Caching**: Saves content hash to skip regeneration
-8. **Output**: Saves WAV file to corresponding path in `audios/`
+8. **Output**: Saves MP3 file to corresponding path in `audios/` (deletes WAV after successful compression)
+
+### Compress Already-Generated WAVs
+
+If you have older `.wav` files already generated under `audios/`, you can compress them to VBR MP3 and delete the WAVs after successful conversion:
+
+```bash
+python compress_existing_audios.py --root audios --quality 6
+```
+
+Keep the WAVs instead:
+
+```bash
+python compress_existing_audios.py --root audios --quality 6 --keep-wav
+```
 
 ## Advanced Features
 
